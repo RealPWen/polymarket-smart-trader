@@ -219,18 +219,21 @@ class SmartTraderFinder:
             reverse=True
         )
         
-        print(f"\n🏆 SMART TRADERS 排行榜 (Top 10) [共筛选出 {len(ranked_traders)} 人]")
+        print(f"\n🏆 SMART TRADERS 排行榜 (Top 15) [共筛选出 {len(ranked_traders)} 人]")
         print("="*90)
         print(f"{'排名':<5} {'地址':<44} {'胜率':<8} {'总盈亏($)':<12} {'盈亏比':<8} {'场次':<8}")
         print("-" * 90)
         
-        for rank, t in enumerate(ranked_traders[:10], 1):
+        # 展示 Top 15
+        top_n_traders = ranked_traders[:15]
+        
+        for rank, t in enumerate(top_n_traders, 1):
             addr_display = t['address']
             print(f"{rank:<5} {addr_display:<44} {t['win_rate']:.1%}    {t['total_pnl']:<12.2f} {t['profit_factor']:<8.2f} {t['closed_count']:<8}")
             
-        # 导出结果
-        df = pd.DataFrame(ranked_traders)
-        filename = f"smart_traders_win{int(min_win_rate*100)}_trades{min_trades}.csv"
+        # 导出结果 (只保存 Top 15)
+        df = pd.DataFrame(top_n_traders)
+        filename = "traders_pool.csv"
         df.to_csv(filename, index=False)
         print(f"\n💾 完整榜单已保存至: {filename}")
         
