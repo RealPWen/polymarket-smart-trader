@@ -410,6 +410,59 @@ class TraderVisualizer:
             0% {{ background: #e3f2fd; }}
             100% {{ background: white; }}
         }}
+        /* Copy Trade Toggle Styles */
+        .toggle-container {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #ccc;
+            background: #2a2a2a;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-right: 15px;
+        }}
+        .switch {{
+            position: relative;
+            display: inline-block;
+            width: 32px;
+            height: 18px;
+        }}
+        .switch input {{
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }}
+        .slider {{
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #555;
+            transition: .4s;
+            border-radius: 34px;
+        }}
+        .slider:before {{
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }}
+        input:checked + .slider {{
+            background-color: #00c853;
+        }}
+        input:checked + .slider:before {{
+            transform: translateX(14px);
+        }}
+        .copy-status-active {{ color: #00c853; }}
     </style>
 </head>
 <body>
@@ -477,11 +530,21 @@ class TraderVisualizer:
     <!-- Live Monitor Panel -->
     <div id="live-monitor">
         <div class="monitor-header">
-            <div>
+            <div style="display: flex; align-items: center;">
                 <strong>Live Monitor</strong>
                 <span class="live-badge">LIVE</span>
             </div>
-            <div class="close-btn" onclick="toggleMonitor()">&times;</div>
+            
+            <div style="display: flex; align-items: center;">
+                <div class="toggle-container">
+                    <span id="copy-trade-label">跟单 OFF</span>
+                    <label class="switch">
+                        <input type="checkbox" id="copy-trade-toggle" onchange="toggleCopyTradeProcess()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="close-btn" onclick="toggleMonitor()">&times;</div>
+            </div>
         </div>
         <div id="stream-content" class="stream-container">
             <div style="text-align:center; padding: 40px; color: #999;">
@@ -510,8 +573,59 @@ class TraderVisualizer:
             
             if (monitor.classList.contains('open')) {{
                 startMonitoring();
+                checkCopyTradeStatus(); // Check status when sidebar opens
             }} else {{
                 stopMonitoring();
+            }}
+        }}
+
+        async function checkCopyTradeStatus() {{
+            try {{
+                const res = await fetch(`/api/copy-trade/status/${{traderAddress}}`);
+                const data = await res.json();
+                const toggle = document.getElementById('copy-trade-toggle');
+                const label = document.getElementById('copy-trade-label');
+                
+                toggle.checked = data.is_running;
+                if (data.is_running) {{
+                    label.innerText = '跟单 ON';
+                    label.classList.add('copy-status-active');
+                }} else {{
+                    label.innerText = '跟单 OFF';
+                    label.classList.remove('copy-status-active');
+                }}
+            }} catch (e) {{
+                console.error("Failed to check status", e);
+            }}
+        }}
+
+        async function toggleCopyTradeProcess() {{
+            const toggle = document.getElementById('copy-trade-toggle');
+            const label = document.getElementById('copy-trade-label');
+            const endpoint = toggle.checked ? '/api/copy-trade/start' : '/api/copy-trade/stop';
+            
+            // Optimistic update
+            label.innerText = toggle.checked ? '... 处理中' : '... 处理中';
+
+            try {{
+                const res = await fetch(endpoint, {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{address: traderAddress}})
+                }});
+                const result = await res.json();
+                
+                if (result.error) {{
+                    alert("操作失败: " + result.error);
+                    toggle.checked = !toggle.checked;
+                }}
+                
+                // Final update after response
+                await checkCopyTradeStatus();
+            }} catch (e) {{
+                alert("网络请求失败");
+                toggle.checked = !toggle.checked;
+                checkCopyTradeStatus();
             }}
         }}
 
