@@ -207,6 +207,15 @@ class PolymarketDataFetcher:
         url = f"{self.data_api_base}/value"
         params = {"user": wallet_address}
         return self._make_request_json(url, params, "用户价值")
+
+    def get_user_cash_balance(self, wallet_address: str) -> float:
+        """获取用户的 USDC 现金余额"""
+        try:
+            val_data = self.get_user_value(wallet_address)
+            # API 返回字典中通常包含 'cash' 字段
+            return float(val_data.get('cash', 0))
+        except:
+            return 0.0
     
     # ==================== Data API - Market Activity ====================
     

@@ -13,6 +13,20 @@ app = Flask(__name__)
 visualizer = TraderVisualizer()
 fetcher = PolymarketDataFetcher()
 
+# --- 启动时连接验证 ---
+try:
+    import config
+    from polymarket_trader import PolymarketTrader
+    print("🌐 [系统] 正在启动并验证 Polymarket 连接...")
+    if config.PRIVATE_KEY and config.FUNDER_ADDRESS:
+        # 尝试简单初始化验证
+        tester = PolymarketTrader(config.PRIVATE_KEY, config.FUNDER_ADDRESS)
+        print("✅ [系统] 凭证验证成功，API 已就绪")
+    else:
+        print("⚠️ [系统] 警告：未检测到完整配置，实盘跟单功能可能受限")
+except Exception as e:
+    print(f"❌ [系统] 启动连接验证失败: {e}")
+# --------------------
 
 @app.route('/')
 def index():

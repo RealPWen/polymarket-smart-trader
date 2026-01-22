@@ -199,13 +199,57 @@ if __name__ == "__main__":
     # 注册默认处理器
     listener.add_handler(ConsoleLogHandler()) # 保持原本的控制台美化显示
     
-    # 新增：注册自动跟单/数据存盘处理器
-    from trade_handlers import AutoCopyTradeHandler, FileLoggerHandler
+    # 新增：导入必要的处理器和配置
+    from trade_handlers import AutoCopyTradeHandler, FileLoggerHandler, RealExecutionHandler
+    import config
     
-    # 1. 独立 JSON 文件记录 (每个订单一个文件)
+    # --- 交互式跟单策略选择 ---
+    print("\n" + "="*40)
+    print("🎯 请选择跟单策略方式:")
+    print("1. 按金额比例 (如: 对方下100，你下100 * 比例)")
+    print("2. 按仓位占比 (如: 对方下其仓位10%，你也下你仓位10%)")
+    print("3. 恒定金额   (如: 无论对方下多少，你固定下 USD 金额)")
+    print("="*40)
+    
+    try:
+        choice = input("请输入编号 (1/2/3, 默认1): ").strip() or "1"
+        strategy_mode = int(choice)
+        strategy_param = 1.0
+        
+        if strategy_mode == 1:
+            val = input("请输入下单比例 (默认 1.0): ").strip() or "1.0"
+            strategy_param = float(val)
+            print(f"✅ 已选择模式 1: 按金额比例 | 参数: {strategy_param}")
+            
+        elif strategy_mode == 2:
+            print(f"✅ 已选择模式 2: 按仓位占比 (基于实时余额计算)")
+            
+        elif strategy_mode == 3:
+            val = input("请输入单笔恒定金额 USD (默认 50.0): ").strip() or "50.0"
+            strategy_param = float(val)
+            print(f"✅ 已选择模式 3: 恒定金额 | 单笔: ${strategy_param}")
+            
+        else:
+            print("⚠️ 输入无效，自动切换为模式 1，比例 1.0")
+            strategy_mode = 1
+            strategy_param = 1.0
+            
+    except Exception as e:
+        print(f"⚠️ 输入错误 ({e})，使用默认设置: 模式 1, 比例 1.0")
+        strategy_mode = 1
+        strategy_param = 1.0
+
+    strategy_config = {"mode": strategy_mode, "param": strategy_param}
+    print("="*40 + "\n")
+
+    # 1. 实盘下单处理器 (核心：真金白银下单)
+    # 传递选定的策略配置
+    listener.add_handler(RealExecutionHandler(config.PRIVATE_KEY, config.FUNDER_ADDRESS, strategy_config=strategy_config))
+    
+    # 2. 独立 JSON 文件记录 (每个订单一个文件)
     listener.add_handler(AutoCopyTradeHandler(save_dir=f"monitored_trades/{target_wallet}"))
     
-    # 2. 汇总 JSONL 日志记录 (所有订单在一个文件)
+    # 3. 汇总 JSONL 日志记录 (所有订单在一个文件)
     listener.add_handler(FileLoggerHandler(filename=f"monitored_trades/session_{target_wallet}.jsonl"))
     
     listener.start_listening()
