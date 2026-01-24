@@ -1,84 +1,89 @@
-# 🎯 Polymarket Smart Trader & Copy-Trading System
+# 🎯 Polymarket Smart Trader & Copier (专业级多路跟单系统)
 
-这是一个专为 **Polymarket** 打造的专业级交易员分析工具与自动化跟单系统。它集成了深度数据分析、多策略执行监控以及全方位的可视化仪表盘，助你发现并跟随市场上的明星交易员。
-
----
-
-## 🌟 核心功能
-
-### 1. 📊 深度交易员分析 (Trader Analysis)
-利用 Polymarket Data API，对任意地址进行深度审计，生成专业的可视化报告：
-- **收益曲线 (Equity Curve)**：实时计算并展示累计 PnL 走势。
-- **市场表现 (Win/Loss Rank)**：自动统计该交易员在各个市场的盈亏排名。
-- **当前持仓 (Live Positions)**：透视交易员当前持有的所有份额及价值。
-- **历史订单流 (Order History)**：完整还原所有的买入与卖出细节。
-
-![Trader Analysis](docs/assets/analysis.png)
-
-### 2. 🛡️ 智能跟单策略 (Smart Copy-Trade)
-系统提供三种灵活的跟单模式，满足不同资金规模的玩家需求：
-- **按金额比例 (Amount Ratio)**：跟随交易员的下单金额按固定比例缩放。
-- **仓位占比 (Portfolio Ratio)**：根据双方余额比例自动计算仓位，实现真正的“复制”交易。
-- **恒定金额 (Constant Amount)**：无论对方下多少，你始终以固定的 USD 金额投入。
-
-![Strategy Setup](docs/assets/setup.png)
-
-### 3. 🚀 实时跟单仪表盘 (Live Dashboard)
-三栏布局的专业监控台，让你实时掌握全局：
-- **左栏 (我的账户)**：实时显示你的 USDC 余额以及通过系统下达的跟单记录。
-- **中栏 (实时收益)**：通过可视化图表监控跟单后的即时回报。
-- **右栏 (目标流)**：实时同步目标交易员的每一个链上动作。
-
-![Live Dashboard](docs/assets/dashboard.png)
+这是一个专为 **Polymarket** 深度玩家打造的“雷达式”交易员分析与同步执行系统。它不仅能帮助你快速审计市场上明星交易员的往期战绩，还能让你实时开启单路或“多路聚合”的跟随交易。
 
 ---
 
-## 🛠️ 安装与配置
+## 🔥 核心升级：多路聚合看板 (Multi-Trader Integration)
 
-### 1. 安装依赖
-确保你使用的是 Python 3.9+ 环境：
+本系统已全面升级为**多任务并发架构**，支持以下高级特性：
+- **组合分析**：支持同时输入多个钱包地址，生成聚合对比曲线，一眼辨别谁才是真正的“交易之神”。
+- **聚合跟单**：支持单进程同时监听多个目标，只需一个控制台即可管理由多位高手组成的“交易组合”。
+- **直观报表**：全新的三列并排详情设计，将持仓分布、高盈利市场、最新流水完美呈现。
+
+---
+
+## 🌟 主要功能演示
+
+### 1. 📊 深度战绩审计
+输入地址（或逗号分隔的多个地址），系统将并行抓取 Polymarket 链上数据：
+- **对比收益曲线**：在同一坐标系下对比多人的累计盈亏。
+- **三维数据视图**：Current Positions (当前持仓)、Performance (绩效榜)、Order History (订单流) 全新圆角卡片化展示。
+- **内部滚动优化**：支持长数据滚动查看，保持页面整洁。
+
+### 2. 🚀 一键开启监控
+在分析结果折线图的右上角，点击 **“Start Live Monitor”** 即可自动捕捉所有当前分析的目标，并根据你设定的模式开启秒级监听。
+
+### 3. 🛡️ 稳健跟单逻辑
+- **按比例 (Ratio)**：根据目标下单额的倍数进行跟随。
+- **恒定金额 (Fixed Amount)**：每次下单固定投入 USD。
+- **安全过滤**：自动识别并跳过极低额度（不足 5 股）的无意义成交。
+
+---
+
+## 🛠️ 快速部署指南
+
+### 1. 环境准备
+项目基于 **Python 3.9+**，请先安装必备的核心库：
 ```bash
 pip install flask pandas requests py-clob-client python-dotenv plotly
 ```
 
-### 2. 配置环境变量
-在项目根目录创建 `.env` 文件，填入你的 Polymarket 凭证：
+### 2. 获取 API 凭证 (关键)
+你需要准备一个存有一定 USDC 的 Polymarket 钱包作为“执行钱包”：
+1. 访问 [reveal.polymarket.com](https://reveal.polymarket.com) 导出你的**私钥 (Private Key)**。
+2. 找到你的 **Funder Address** (Proxy 钱包地址)。
+
+### 3. 配置核心变量
+在项目根目录创建 `.env` 文件 (可参照 `.env.example`)：
 ```env
-POLYMARKET_PRIVATE_KEY=你的私钥 (从 reveal.polymarket.com 导出)
-POLYMARKET_FUNDER_ADDRESS=你的代理钱包地址
+POLYMARKET_PRIVATE_KEY=填入你的私钥
+POLYMARKET_FUNDER_ADDRESS=填入你的Funder地址
 POLYMARKET_SIGNATURE_TYPE=1
 MIN_REQUIRED_USDC=5.0
 ```
 
 ---
 
-## 🚀 启动与使用
+## 🚀 使用指南
 
-### 1. 运行 Web 服务器
+### 第一步：启动主服务器
+执行以下命令启动 Flask 后端：
 ```bash
-python3.9 user_listener/app.py
+# 在项目路径下运行
+/opt/homebrew/bin/python3.9 user_listener/app.py
 ```
-启动成功后，浏览器访问 `http://127.0.0.1:5005`。
+默认访问端口为 `5001` (或 `5005`，请根据控制台输出为准)：[http://127.0.0.1:5001](http://127.0.0.1:5001)
 
-### 2. 开始跟单流程
-1. **输入地址**：在主页输入你想分析的交易员地址。
-2. **分析报告**：查看分析报告，双击 “Order History” 或点击开关进入跟单配置。
-3. **选择策略**：根据你的资金量选择合适的比例或模式。
-4. **即时监控**：跳转至 Dashboard，坐享自动化跟单体验。
+### 第二步：分析与对比
+1. 在首页输入你想观察的高手地址。
+2. 点击 **“+”** 增加更多地址进行对比分析。
+3. 点击 **“Analyze Now”** 生成深度报告。
 
----
+### 第三步：批量跟单启动
+1. 在生成的报表右上角点击 **“🚀 Start Live Monitor”**。
+2. 页面会跳转至策略配置页，自动带入刚才的所有地址。
+3. 选择 **“恒定金额”** 或 **“按比例”**，设定参数（例如 50 U 或 1.0 倍）。
+4. 点击 **“确认并启动”**，系统会开启后台监听进程。
 
-## 📂 项目结构
-- `user_listener/app.py`: Flask Web 服务器核心，处理路由与 API。
-- `user_listener/account_listener.py`: 核心监听器，捕获链上交易。
-- `user_listener/trade_handlers.py`: 策略执行层，负责计算金额并调用 API 下单。
-- `user_listener/trader_analyzer.py`: 数据分析模块，负责 PnL 计算。
-- `user_listener/visualize_trader.py`: 报告生成引擎。
-- `user_listener/polymarket_trader.py`: CLOB 下单协议集成。
+### 第四步：看板监控
+启动后会自动跳转至 **Dashboard**，在这里你可以看到自己的实时余额变动，以及高手们最新推送到你账户里的跟随订单。
 
 ---
 
-## ⚠️ 免责声明
-本项目仅供学习和技术研究使用。加密货币交易涉及极高风险，**过往业绩不代表未来表现**。请确保在使用前充分理解代码逻辑，并注意资金安全。
+## ⚠️ 风险提示与声明
+*   **资金风险**：跟单交易具有高度的不确定性。请始终设置你能够承受损失的金额。
+*   **网络延迟**：虽然监听为秒级，但在某些极端行情下，跟单价格可能与目标产生一定滑点。
+*   **仅供技术研究**：本项目旨在展示如何利用 Polymarket API 进行自动化套利与跟随，不构成任何投资建议。
 
-**Happy Trading! 💸**
+**Happy Profiting! 💹**

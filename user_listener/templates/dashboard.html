@@ -331,10 +331,10 @@
 
         <!-- 中间: 收益曲线对比 -->
         <div class="col-center" style="display: flex; flex-direction: column;">
-            <!-- 我的收益曲线 (占地 60%) -->
-            <div class="panel" style="flex: 3; min-height: 0;">
+            <!-- 我的总收益曲线 (始终固定在顶部) -->
+            <div class="panel" style="flex: 2; min-height: 300px;">
                 <div class="panel-header">
-                    <span>我的账户累计收益 (My Equity Curve)</span>
+                    <span>我的账户累计总收益 (Overall PnL)</span>
                     <span id="my-pnl-total" style="font-size: 12px; color: var(--success);">--</span>
                 </div>
                 <div class="panel-content" style="padding: 0; overflow: hidden; display: flex;">
@@ -342,15 +342,10 @@
                 </div>
             </div>
 
-            <!-- 目标交易员收益曲线 (占地 40%) -->
-            <div class="panel" style="flex: 2; min-height: 0;">
-                <div class="panel-header">
-                    <span>跟踪账户收益表现 (Target Performance)</span>
-                    <span id="target-pnl-total" style="font-size: 12px; color: var(--primary);">--</span>
-                </div>
-                <div class="panel-content" style="padding: 0; overflow: hidden; display: flex;">
-                    <div id="target-pnl-chart" style="flex: 1; width: 100%;"></div>
-                </div>
+            <!-- 目标对比容器：JS 将动态向此容器添加各个交易员的图表 -->
+            <div id="target-charts-container"
+                style="flex: 3; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-bottom: 20px;">
+                <!-- JS 动态填充 -->
             </div>
         </div>
 
@@ -378,11 +373,12 @@
     <audio id="notif-sound"
         src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTdvT19"></audio>
     <script>
-        const dingUrl = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; // 更换为一个好听的在线提示音
+        const dingUrl = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
         document.getElementById('notif-sound').src = dingUrl;
-        // URL 参数
+
+        // URL 参数解析
         const params = new URLSearchParams(window.location.search);
-        const targetAddress = params.get('address');
+        const addressList = (params.get('address') || "").split(',').filter(a => a.startsWith('0x'));
         const mode = params.get('mode');
         const param = params.get('param');
         const orderType = params.get('order_type');
@@ -390,139 +386,189 @@
 
         // 更新顶部策略展示
         if (mode) {
-            const modeNames = {
-                '1': '按金额比例 (Ratio)',
-                '2': '按仓位占比 (Portfolio)',
-                '3': '恒定金额 (Constant)'
-            };
+            const modeNames = { '1': '金额比例 (Ratio)', '2': '仓位占比 (Portfolio)', '3': '恒定金额 (Constant)' };
             document.getElementById('display-strategy').innerText = modeNames[mode] || '自定义';
-
-            let paramText = '--';
-            if (mode === '1') paramText = 'x' + param;
-            if (mode === '2') paramText = '自动计算';
-            if (mode === '3') paramText = '$' + param;
-            document.getElementById('display-param').innerText = paramText;
+            let pText = '--';
+            if (mode === '1') pText = 'x' + param;
+            if (mode === '2') pText = '自动计算';
+            if (mode === '3') pText = '$' + param;
+            document.getElementById('display-param').innerText = pText;
         }
-        if (orderType) {
-            document.getElementById('display-type').innerText = orderType;
-        }
+        if (orderType) document.getElementById('display-type').innerText = orderType;
+        document.getElementById('target-addr').innerText = addressList.length > 1 ? `${addressList.length} 个地址` : addressList[0];
 
-        // --- 状态缓存对象：用于对比数据是否发生变化 ---
-        const lastState = {
-            balance: "",
-            positions: "",
-            executions: "",
-            targetStream: "",
-            myAnalysis: "",
-            targetAnalysis: ""
-        };
+        // --- 动态生成目标曲线 UI ---
+        const targetContainer = document.getElementById('target-charts-container');
+        addressList.forEach((addr, index) => {
+            const html = `
+                <div class="panel" style="flex: none; height: 250px;">
+                    <div class="panel-header">
+                        <span>跟踪: ${addr.slice(0, 8)}...${addr.slice(-6)}</span>
+                        <span id="total-pnl-${addr}" style="font-size: 12px; color: var(--primary);">--</span>
+                    </div>
+                    <div class="panel-content" style="padding: 0; display: flex;">
+                        <div id="chart-${addr}" style="flex: 1; width: 100%;"></div>
+                    </div>
+                </div>
+            `;
+            targetContainer.insertAdjacentHTML('beforeend', html);
+        });
 
-        // --- 哈希追踪：记录已经展示过的交易哈希 ---
-        const knownHashes = {
-            executions: new Set(),
-            targetStream: new Set()
-        };
+        // --- 状态与追踪 ---
+        const lastState = { balance: "", positions: "", executions: "", targetStream: "" };
+        const knownHashes = { executions: new Set(), targetStream: new Set() };
+        let initialLoadDone = { executions: false, targetStream: false };
 
-        // 是否是第一次加载（第一次加载不显示 NEW 标签）
-        let initialLoadDone = {
-            executions: false,
-            targetStream: false
-        };
-
-        if (targetAddress) document.getElementById('target-addr').innerText = targetAddress;
-
-        // 定时刷新器
+        // 定时刷新
         setInterval(() => {
             fetchMyBalance();
             fetchMyPositions();
             fetchMyExecutions();
-            fetchTargetStream();
+            fetchTargetStreamAggregate(); // 聚合拉取
             updateCharts();
         }, 5000);
 
-        // 1. 获取我的余额和地址
+        function playNotification() {
+            const audio = document.getElementById('notif-sound');
+            if (audio) { audio.currentTime = 0; audio.play().catch(e => { }); }
+        }
+
         async function fetchMyBalance() {
             try {
                 const res = await fetch('/api/my-balance');
                 const data = await res.json();
-                const dataStr = JSON.stringify(data);
-
-                // 仅在数据变化时更新
-                if (dataStr === lastState.balance) return;
-                lastState.balance = dataStr;
-
+                const str = JSON.stringify(data);
+                if (str === lastState.balance) return;
+                lastState.balance = str;
                 if (data.cash !== undefined) {
                     document.getElementById('my-balance').innerText = '$' + data.cash.toFixed(2);
                     document.getElementById('my-address').innerText = data.address.slice(0, 6) + '...' + data.address.slice(-4);
-                    const isFirstTime = (myWalletAddress === null);
+                    const isFirst = (myWalletAddress === null);
                     myWalletAddress = data.address;
-                    if (isFirstTime) updateCharts(); // 拿到地址后立刻尝试加载一次图表
+                    if (isFirst) updateCharts();
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { }
         }
 
-        // 2. 更新全部图表
         async function updateCharts() {
-            // 拉取我的收益
-            if (myWalletAddress) {
-                fetchAnalysis(myWalletAddress, 'my-pnl-chart', 'my-pnl-total', '#00c853', 'myAnalysis');
-            }
-            // 拉取目标收益
-            if (targetAddress) {
-                fetchAnalysis(targetAddress, 'target-pnl-chart', 'target-pnl-total', '#007bff', 'targetAnalysis');
-            }
+            if (myWalletAddress) fetchAnalysis(myWalletAddress, 'my-pnl-chart', 'my-pnl-total', '#00c853');
+            addressList.forEach(addr => {
+                fetchAnalysis(addr, `chart-${addr}`, `total-pnl-${addr}`, '#007bff');
+            });
         }
 
-        // 通用分析拉取与绘图
-        async function fetchAnalysis(addr, chartId, totalId, color, stateKey) {
+        async function fetchAnalysis(addr, chartId, totalId, color) {
             try {
                 const res = await fetch(`/api/analysis/${addr}`);
                 const data = await res.json();
-                const dataStr = JSON.stringify(data);
-
-                if (dataStr === lastState[stateKey]) return;
-                lastState[stateKey] = dataStr;
-
-                const container = document.getElementById(chartId);
                 if (data.pnl_history && data.pnl_history.length > 0) {
                     const x = data.pnl_history.map(d => d.date);
                     const y = data.pnl_history.map(d => d.cumulative_pnl);
-
                     const lastPnl = y[y.length - 1];
-                    const totalEl = document.getElementById(totalId);
-                    totalEl.innerText = (lastPnl >= 0 ? '+' : '') + '$' + lastPnl.toFixed(2);
-                    totalEl.style.color = lastPnl >= 0 ? '#00c853' : '#ff1744';
-
-                    const fillRGBA = color === '#00c853' ? 'rgba(0, 200, 83, 0.15)' : 'rgba(0, 123, 255, 0.15)';
-
+                    const el = document.getElementById(totalId);
+                    if (el) {
+                        el.innerText = (lastPnl >= 0 ? '+' : '') + '$' + lastPnl.toFixed(2);
+                        el.style.color = lastPnl >= 0 ? '#00c853' : '#ff1744';
+                    }
                     Plotly.react(chartId, [{
                         x: x, y: y, type: 'scatter', mode: 'lines+markers',
                         marker: { size: 4, opacity: 0.5 },
                         fill: 'tozeroy',
                         line: { color: color, width: 3, shape: 'spline' },
-                        fillcolor: fillRGBA
+                        fillcolor: color === '#00c853' ? 'rgba(0,200,83,0.1)' : 'rgba(0,123,255,0.1)'
                     }], {
-                        paper_bgcolor: 'rgba(0,0,0,0)',
-                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
                         font: { color: '#888', size: 10 },
                         margin: { t: 5, r: 25, l: 35, b: 30 },
-                        xaxis: { gridcolor: '#222', showgrid: true, zeroline: false, tickfont: { size: 9 } },
+                        xaxis: { gridcolor: '#222', showgrid: true, zeroline: false },
                         yaxis: { gridcolor: '#222', showgrid: true, zeroline: true, zerolinecolor: '#444', tickprefix: '$' },
                         autosize: true
                     }, { responsive: true, displayModeBar: false });
                 }
-            } catch (e) { console.error(`Failed to fetch analysis:`, e); }
+            } catch (e) { }
         }
 
-        // --- 新增：响应式布局适配 ---
-        window.addEventListener('resize', () => {
-            ['my-pnl-chart', 'target-pnl-chart'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) Plotly.Plots.resize(el);
-            });
-        });
+        async function fetchTargetStreamAggregate() {
+            try {
+                // 并发请求所有地址的流
+                const results = await Promise.all(addressList.map(addr => fetch(`/stream/${addr}`).then(r => r.json())));
+                // 合并并平铺
+                let allTrades = [];
+                results.forEach((list, i) => {
+                    const traderTag = addressList[i].slice(0, 6);
+                    list.forEach(t => {
+                        t._trader = traderTag; // 标记来源
+                        allTrades.push(t);
+                    });
+                });
 
-        // 其他原有拉取函数保持...
+                // 按日期排序 (最新在前)
+                allTrades.sort((a, b) => new Date(b.date_str) - new Date(a.date_str));
+
+                const dataStr = JSON.stringify(allTrades);
+                if (initialLoadDone.targetStream && dataStr !== lastState.targetStream) {
+                    if (localStorage.getItem('enable_sound') === 'true') playNotification();
+                }
+                if (dataStr === lastState.targetStream) return;
+                lastState.targetStream = dataStr;
+
+                const container = document.getElementById('target-trades-list');
+                container.innerHTML = allTrades.map(t => {
+                    const isNew = initialLoadDone.targetStream && !knownHashes.targetStream.has(t.transactionHash);
+                    knownHashes.targetStream.add(t.transactionHash);
+                    return `
+                    <div class="trade-item ${isNew ? 'item-new-entry' : ''}">
+                        <div class="trade-info">
+                            <span style="color: #fff; font-size: 11px;">
+                                <span style="color:var(--primary); font-weight:bold;">[${t._trader}]</span> 
+                                ${isNew ? '<span class="badge-new">NEW</span>' : ''}
+                                ${t.title.slice(0, 20)}...
+                            </span>
+                            <div style="margin-top:2px;">
+                                <span class="${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.side}</span>
+                                <span>${t.outcome}</span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="display:block; font-weight:bold;">$${(t.size * t.price).toFixed(2)}</span>
+                            <span class="trade-meta">${t.date_str.split(' ')[1]}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                initialLoadDone.targetStream = true;
+            } catch (e) { }
+        }
+
+        async function fetchMyExecutions() {
+            try {
+                const res = await fetch('/api/my-executions');
+                const data = await res.json();
+                if (JSON.stringify(data) === lastState.executions) return;
+                lastState.executions = JSON.stringify(data);
+                const container = document.getElementById('my-trades-list');
+                container.innerHTML = data.map(t => {
+                    const id = t.timestamp + t.side + t.size;
+                    const isNew = initialLoadDone.executions && !knownHashes.executions.has(id);
+                    knownHashes.executions.add(id);
+                    return `
+                    <div class="trade-item ${isNew ? 'item-new-entry' : ''}">
+                        <div class="trade-info">
+                            <span style="color: #fff; font-size: 11px; font-weight: bold;">
+                                ${isNew ? '<span class="badge-new">NEW</span>' : ''}
+                                ${t.market_title.slice(0, 25)}
+                            </span>
+                            <div><span class="${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.side}</span> ${t.size} 股</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="display:block; font-weight:bold;">$${t.my_target_amount.toFixed(2)}</span>
+                            <span class="trade-meta">${t.date_str.split(' ')[1]}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                initialLoadDone.executions = true;
+            } catch (e) { }
+        }
+
         async function fetchMyPositions() {
             try {
                 const res = await fetch('/api/my-positions');
@@ -550,125 +596,28 @@
                 `).join('');
             } catch (e) { console.error(e); }
         }
-
-        // 声音控制逻辑
         function toggleSoundPref() {
-            const isChecked = document.getElementById('sound-toggle').checked;
-            localStorage.setItem('enable_sound', isChecked ? 'true' : 'false');
-            if (isChecked) playNotification(); // 开启时测试一下
+            const checked = document.getElementById('sound-toggle').checked;
+            localStorage.setItem('enable_sound', checked ? 'true' : 'false');
+            if (checked) playNotification();
         }
 
-        function playNotification() {
-            const audio = document.getElementById('notif-sound');
-            if (audio) {
-                audio.currentTime = 0;
-                audio.play().catch(e => console.warn("Autoplay blocked by browser. Interact with page first."));
-            }
-        }
-
-        async function fetchMyExecutions() {
-            try {
-                const res = await fetch('/api/my-executions');
-                const data = await res.json();
-                const dataStr = JSON.stringify(data);
-
-                if (dataStr === lastState.executions) return;
-                lastState.executions = dataStr;
-
-                const container = document.getElementById('my-trades-list');
-                if (!data || data.length === 0) {
-                    container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">暂无跟单记录</div>';
-                    return;
-                }
-
-                container.innerHTML = data.map(t => {
-                    const txId = t.timestamp + '_' + t.side + '_' + t.size; // 组合唯一ID
-                    const isNew = initialLoadDone.executions && !knownHashes.executions.has(txId);
-                    knownHashes.executions.add(txId);
-
-                    return `
-                    <div class="trade-item ${isNew ? 'item-new-entry' : ''}">
-                        <div class="trade-info">
-                            <span style="color: #fff; font-size: 11px; font-weight: bold;">
-                                ${isNew ? '<span class="badge-new">NEW</span>' : ''}
-                                ${(t.market_title || 'Unknown').slice(0, 30)}
-                            </span>
-                            <div>
-                                <span class="${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.side}</span>
-                                <span style="font-weight: bold;">${t.size} 股</span>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="display:block; font-weight:bold;">$${t.my_target_amount.toFixed(2)}</span>
-                            <span class="trade-meta">${t.date_str.split(' ')[1]}</span>
-                        </div>
-                    </div>`;
-                }).join('');
-                initialLoadDone.executions = true;
-            } catch (e) { console.error(e); }
-        }
-
-        async function fetchTargetStream() {
-            if (!targetAddress) return;
-            try {
-                const res = await fetch(`/stream/${targetAddress}`);
-                const data = await res.json();
-                const dataStr = JSON.stringify(data);
-
-                // --- 声音提醒逻辑 ---
-                if (initialLoadDone.targetStream && dataStr !== lastState.targetStream) {
-                    const isSoundEnabled = localStorage.getItem('enable_sound') === 'true';
-                    if (isSoundEnabled) playNotification();
-                }
-
-                if (dataStr === lastState.targetStream) return;
-                lastState.targetStream = dataStr;
-
-                const container = document.getElementById('target-trades-list');
-                if (data.length === 0) return;
-
-                container.innerHTML = data.map(t => {
-                    const txHash = t.transactionHash;
-                    const isNew = initialLoadDone.targetStream && !knownHashes.targetStream.has(txHash);
-                    knownHashes.targetStream.add(txHash);
-
-                    return `
-                    <div class="trade-item ${isNew ? 'item-new-entry' : ''}">
-                        <div class="trade-info">
-                            <span style="color: #fff;">
-                                ${isNew ? '<span class="badge-new">NEW</span>' : ''}
-                                ${t.title.slice(0, 25)}...
-                            </span>
-                            <div style="margin-top:2px;">
-                                <span class="${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.side}</span>
-                                <span>${t.outcome}</span>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="display:block; font-weight:bold;">$${(t.size * t.price).toFixed(2)}</span>
-                            <span class="trade-meta">${t.date_str.split(' ')[1]}</span>
-                        </div>
-                    </div>`;
-                }).join('');
-                initialLoadDone.targetStream = true;
-            } catch (e) { console.error(e); }
-        }
-
-        // 首次加载完成握手
-        fetchMyBalance().then(() => {
-            // 初始化声音开关状态
-            const savedPref = localStorage.getItem('enable_sound');
-            if (savedPref === 'true') {
-                document.getElementById('sound-toggle').checked = true;
-            }
-
-            fetchMyPositions();
-            fetchMyExecutions();
-            fetchTargetStream();
+        // --- 新增：响应式布局适配 ---
+        window.addEventListener('resize', () => {
+            ['my-pnl-chart', ...addressList.map(addr => `chart-${addr}`)].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) Plotly.Plots.resize(el);
+            });
         });
 
+        fetchMyBalance().then(() => {
+            const saved = localStorage.getItem('enable_sound');
+            if (saved === 'true') document.getElementById('sound-toggle').checked = true;
+            fetchMyPositions();
+            fetchMyExecutions();
+            fetchTargetStreamAggregate();
+        });
     </script>
-
 </body>
 
 </html>

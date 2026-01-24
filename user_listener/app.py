@@ -232,61 +232,55 @@ def copy_trade_setup():
 def launch_copy_trade():
     try:
         data = request.json
-        address = data.get('address')
-        strategy = data.get('strategy') # {"mode": 1, "param": 1.0}
+        addresses = data.get('addresses', []) # 获取地址列表
+        strategy = data.get('strategy')
         
-        if not address or not strategy:
+        if not addresses or not strategy:
             return jsonify({"error": "Missing parameters"}), 400
             
-        address = address.lower()
-        
-        # 显式日志审计
-        import config
-        print("\n" + "🔔" * 20)
-        print(f"🚀 [后台指令] 准备启动跟单进程")
-        print(f"📡 [监控目标] : {address}")
-        print(f"💰 [执行账号] : {config.FUNDER_ADDRESS}")
-        print("🔔" * 20 + "\n")
-
-        # 检查是否已运行
-        try:
-            find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
-            result = subprocess.run(find_cmd, shell=True, capture_output=True, text=True)
-            if result.stdout.strip():
-                 return jsonify({"status": "already_running", "address": address}), 200
-        except:
-            pass
-
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        # 尝试获取 Python 路径，如果 which 失败则由 sys.executable 兜底
+        import base64
+        import json # Added import for json
+        strategy_json = json.dumps(strategy)
+        strategy_b64 = base64.b64encode(strategy_json.encode('utf-8')).decode('utf-8')
+        
+        # 尝试获取 Python 路径
         try:
             python_path = subprocess.check_output(['which', 'python3.9']).decode().strip()
         except:
-            import sys
+            import sys # Added import for sys
             python_path = sys.executable
 
         listener_script = os.path.join(project_root, 'user_listener', 'account_listener.py')
         
-        # 将策略配置转换为 Base64 字符串传递给 CLI (完美避开引号转义地狱)
-        import base64
-        strategy_json = json.dumps(strategy)
-        strategy_b64 = base64.b64encode(strategy_json.encode('utf-8')).decode('utf-8')
-        
-        applescript = f'''
-        tell application "Terminal"
-            do script "cd {project_root} && {python_path} {listener_script} {address} {strategy_b64}"
-            activate
-        end tell
-        '''
-        
-        subprocess.Popen(['osascript', '-e', applescript], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        import time
-        time.sleep(2)
-        
-        return jsonify({"status": "launched", "address": address})
+        started_count = 0
+        for address in addresses:
+            address = address.lower().strip()
+            
+            # 检查该地址是否已运行
+            find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
+            result = subprocess.run(find_cmd, shell=True, capture_output=True, text=True)
+            if result.stdout.strip():
+                print(f"⏩ [跳过] 地址 {address} 已有进程在运行")
+                continue
+
+            # 启动新终端窗口
+            applescript = f'''
+            tell application "Terminal"
+                do script "cd {project_root} && {python_path} {listener_script} {address} {strategy_b64}"
+                activate
+            end tell
+            '''
+            subprocess.run(['osascript', '-e', applescript])
+            started_count += 1
+            print(f"🚀 [启动] 已开启 {address} 的监听进程")
+
+        return jsonify({
+            "status": "success",
+            "message": f"成功启动 {started_count} 路新监听，共计监控 {len(addresses)} 个地址"
+        })
     except Exception as e:
-        print(f"Start error: {e}")
+        print(f"Launch error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/copy-trade/dashboard')

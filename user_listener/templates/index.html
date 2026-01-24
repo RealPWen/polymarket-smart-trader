@@ -250,17 +250,24 @@
 
     <div class="main-container" id="main-container">
         <div class="search-card" id="search-card">
-            <h1>Analyze Any Trader</h1>
-            <p class="subtitle">Enter a Polymarket wallet address to view their detailed performance report.</p>
+            <h1>Analyze Traders</h1>
+            <p class="subtitle">Enter Polymarket wallet addresses to view detailed performance reports.</p>
 
-            <div class="input-group">
-                <input type="text" id="address-input" placeholder="0x..." spellcheck="false" autocomplete="off">
-                <button onclick="handleAnalyze()">Analyze</button>
+            <div id="input-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 2rem;">
+                <div class="input-group address-row">
+                    <input type="text" class="address-input" placeholder="Enter Address (0x...)" spellcheck="false"
+                        autocomplete="off">
+                    <button onclick="addAddressField()" style="padding: 0 1rem; background: #334155;">+</button>
+                </div>
             </div>
+
+            <button onclick="handleAnalyze()" style="width: 100%; padding: 1rem; font-size: 1.1rem;">Analyze
+                Now</button>
 
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <div style="color: var(--text-muted); font-size: 0.9rem;">Fetching data from Polymarket...</div>
+                <div id="loading-text" style="color: var(--text-muted); font-size: 0.9rem;">Fetching data from
+                    Polymarket...</div>
             </div>
 
             <div id="error-msg" style="color: #ff4b4b; margin-top: 1rem; font-size: 0.9rem; display: none;"></div>
@@ -272,24 +279,41 @@
     </div>
 
     <script>
+        function addAddressField() {
+            const container = document.getElementById('input-container');
+            const div = document.createElement('div');
+            div.className = 'input-group address-row';
+            div.style.marginTop = '4px';
+            div.innerHTML = `
+                <input type="text" class="address-input" placeholder="0x..." spellcheck="false" autocomplete="off">
+                <button onclick="this.parentElement.remove()" style="padding: 0 1rem; background: #ef4444;">&times;</button>
+            `;
+            container.appendChild(div);
+        }
+
         async function handleAnalyze() {
-            const address = document.getElementById('address-input').value.trim();
-            if (!address) return;
+            const inputs = document.querySelectorAll('.address-input');
+            const addresses = Array.from(inputs).map(i => i.value.trim()).filter(a => a.startsWith('0x'));
+
+            if (addresses.length === 0) return;
 
             const searchCard = document.getElementById('search-card');
             const loading = document.getElementById('loading');
+            const loadingText = document.getElementById('loading-text');
             const errorMsg = document.getElementById('error-msg');
             const statusTag = document.getElementById('status-tag');
 
             errorMsg.style.display = 'none';
             loading.style.display = 'flex';
-            statusTag.innerText = 'Analyzing ' + address.slice(0, 6) + '...';
+            loadingText.innerText = addresses.length > 1 ? `Analyzing ${addresses.length} traders...` : 'Analyzing trader...';
+            statusTag.innerText = 'Analyzing...';
 
             try {
+                // Pass combined addresses (comma separated) to the backend
                 const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address })
+                    body: JSON.stringify({ address: addresses.join(',') })
                 });
 
                 const data = await response.json();
@@ -331,8 +355,8 @@
             document.getElementById('status-tag').innerText = 'Ready to analyze';
         }
 
-        // Support Enter key
-        document.getElementById('address-input').addEventListener('keypress', (e) => {
+        // Support Enter key on all inputs
+        document.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleAnalyze();
         });
     </script>

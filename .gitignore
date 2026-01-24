@@ -17,6 +17,9 @@ env/
 .vscode/
 .idea/
 
-# Custom data files (optional, depending on if you want to share data or just code)
-# *.csv
-# !example_data.csv
+# Custom data files
+*.csv
+*.jsonl
+monitored_trades/
+report_*.html
+!example_data.csv
