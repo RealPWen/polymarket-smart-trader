@@ -149,7 +149,20 @@ class AccountListener:
                              self.state_hashes[target_address] = set(new_trades_batch['transactionHash'].tolist())
 
                 time.sleep(self.poll_interval)
-                
+                # 如果没有新交易，打印心跳
+                if new_count == 0:
+                    now = datetime.now().strftime('%H:%M:%S') # Re-get current time for heartbeat
+                    print(f"\r🔍 [{now}] 正在监听... (获取到 {num_fetched} 条历史数据，无净增减仓)", end="", flush=True)
+                    
+                    # [新增] 写入心跳文件，方便用户查岗
+                    try:
+                        # Ensure directory exists
+                        os.makedirs("monitored_trades", exist_ok=True)
+                        with open("monitored_trades/heartbeat.log", "a") as f:
+                            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running...\n")
+                    except Exception as file_e: 
+                        print(f"⚠️ [{target_address[:8]}..] 写入心跳文件失败: {file_e}")
+
             except Exception as e:
                 print(f"❌ [{target_address[:8]}..] 监听循环出错: {e}")
                 time.sleep(self.poll_interval)

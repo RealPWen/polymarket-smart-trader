@@ -164,10 +164,15 @@ def update_copy_trade_clients():
         listener_script = os.path.join(project_root, 'user_listener', 'account_listener.py')
         combined_addresses = ",".join([a.lower().strip() for a in new_addresses])
         
-        # 4. 启动新终端
+        # 4. 启动新终端 (使用 caffeinate 防止休眠)
+        # -d: Prevent display sleep
+        # -i: Prevent idle sleep
+        # -m: Prevent disk idle sleep
+        # -s: Prevent system sleep
+        # -u: Declare user is active
         applescript = f'''
         tell application "Terminal"
-            do script "cd {project_root} && {python_path} {listener_script} {combined_addresses} {strategy_b64}"
+            do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
             activate
         end tell
         '''
@@ -347,10 +352,10 @@ def launch_copy_trade():
         # 简单检查：只要还在运行这个脚本，且包含其中一个地址，就视为冲突 (或者您可以设计更复杂的逻辑)
         # 这里为了简化，我们先 kill 掉旧的单一监听器，或者允许并行运行
         
-        # 启动单一终端窗口，传入所有地址
+        # 启动单一终端窗口，传入所有地址 (使用 caffeinate 防休眠)
         applescript = f'''
         tell application "Terminal"
-            do script "cd {project_root} && {python_path} {listener_script} {combined_addresses} {strategy_b64}"
+            do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
             activate
         end tell
         '''
