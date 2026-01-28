@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from visualize_trader import TraderVisualizer
 from polymarket_data_fetcher import PolymarketDataFetcher
 import os
+import platform
 import pandas as pd
 import subprocess
 import signal
@@ -115,19 +116,25 @@ def get_analysis_data(address):
 def _kill_all_listeners():
     """强制终止所有监听进程"""
     try:
-        # 查找所有 account_listener.py 进程
-        cmd = "ps aux | grep 'account_listener.py' | grep -v grep | awk '{print $2}'"
-        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        pids = res.stdout.strip().split('\n')
-        killed_count = 0
-        
-        for pid in pids:
-            if pid:
-                try:
-                    os.kill(int(pid), signal.SIGTERM)
-                    killed_count += 1
-                except: pass
-        return killed_count
+        if platform.system() == 'Windows':
+            # Windows: Find processes by command line and kill them
+            cmd = "Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*account_listener.py*' } | Stop-Process -Force"
+            subprocess.run(["powershell", "-Command", cmd], capture_output=True)
+            return 1
+        else:
+            # macOS / Linux
+            cmd = "ps aux | grep 'account_listener.py' | grep -v grep | awk '{print $2}'"
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            pids = res.stdout.strip().split('\n')
+            killed_count = 0
+            
+            for pid in pids:
+                if pid:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                        killed_count += 1
+                    except: pass
+            return killed_count
     except:
         return 0
 
@@ -170,13 +177,17 @@ def update_copy_trade_clients():
         # -m: Prevent disk idle sleep
         # -s: Prevent system sleep
         # -u: Declare user is active
-        applescript = f'''
-        tell application "Terminal"
-            do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
-            activate
-        end tell
-        '''
-        subprocess.run(['osascript', '-e', applescript])
+        if platform.system() == 'Windows':
+            cmd = [python_path, listener_script, combined_addresses, strategy_b64]
+            subprocess.Popen(cmd, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            applescript = f'''
+            tell application "Terminal"
+                do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
+                activate
+            end tell
+            '''
+            subprocess.run(['osascript', '-e', applescript])
         
         return jsonify({
             "status": "restarted", 
@@ -197,13 +208,22 @@ def start_copy_trade():
     
     # 先检查是否已经在运行
     try:
-        find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
-        result = subprocess.run(find_cmd, shell=True, capture_output=True, text=True)
-        if result.stdout.strip():
-            return jsonify({
-                "status": "already_running",
-                "message": "监听器已经在运行中"
-            }), 200
+        if platform.system() == 'Windows':
+            cmd = f"Get-WmiObject Win32_Process | Where-Object {{ $_.CommandLine -like '*account_listener.py* {address}*' }}"
+            result = subprocess.run(["powershell", "-Command", cmd], capture_output=True, text=True)
+            if result.stdout.strip():
+                return jsonify({
+                    "status": "already_running",
+                    "message": "监听器已经在运行中"
+                }), 200
+        else:
+            find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
+            result = subprocess.run(find_cmd, shell=True, capture_output=True, text=True)
+            if result.stdout.strip():
+                return jsonify({
+                    "status": "already_running",
+                    "message": "监听器已经在运行中"
+                }), 200
     except Exception as e:
         print(f"检查进程状态失败: {e}")
 
@@ -220,30 +240,43 @@ def start_copy_trade():
         listener_script = os.path.join(project_root, 'user_listener', 'account_listener.py')
         
         # 使用 osascript 在新的 Terminal 窗口中启动（macOS）
-        applescript = f'''
-        tell application "Terminal"
-            do script "cd {project_root} && {python_path} {listener_script} {address}"
-            activate
-        end tell
-        '''
+        # 或 subprocess.Popen on Windows
         
-        # 启动进程，但不等待它结束
-        subprocess.Popen(
-            ['osascript', '-e', applescript],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+        if platform.system() == 'Windows':
+            cmd = [python_path, listener_script, address]
+            subprocess.Popen(cmd, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            applescript = f'''
+            tell application "Terminal"
+                do script "cd {project_root} && {python_path} {listener_script} {address}"
+                activate
+            end tell
+            '''
+            
+            # 启动进程，但不等待它结束
+            subprocess.Popen(
+                ['osascript', '-e', applescript],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
         
         # 等待一小会儿，确保监听器进程已经启动
         import time
         time.sleep(2)
         
         # 验证监听器是否成功启动
-        verify_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
-        verify_result = subprocess.run(verify_cmd, shell=True, capture_output=True, text=True)
-        
-        if not verify_result.stdout.strip():
-            raise Exception("监听器启动失败，请检查终端输出")
+        # 验证监听器是否成功启动
+        if platform.system() == 'Windows':
+            verify_cmd = f"Get-WmiObject Win32_Process | Where-Object {{ $_.CommandLine -like '*account_listener.py* {address}*' }}"
+            verify_result = subprocess.run(["powershell", "-Command", verify_cmd], capture_output=True, text=True)
+            if not verify_result.stdout.strip():
+                raise Exception("监听器启动失败，请检查终端输出")
+        else:
+            verify_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
+            verify_result = subprocess.run(verify_cmd, shell=True, capture_output=True, text=True)
+            
+            if not verify_result.stdout.strip():
+                raise Exception("监听器启动失败，请检查终端输出")
         
         return jsonify({
             "status": "started",
@@ -263,23 +296,28 @@ def stop_copy_trade():
     try:
         # 1. 终止监听进程
         try:
-            find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep | awk '{{print $2}}'"
-            result = subprocess.run(
-                find_cmd,
-                shell=True,
-                capture_output=True,
-                text=True
-            )
-            
-            pids = result.stdout.strip().split('\n')
-            pids = [pid for pid in pids if pid]
-            
-            for pid in pids:
-                try:
-                    os.kill(int(pid), signal.SIGTERM)
-                    print(f"成功终止监听进程 PID: {pid}")
-                except Exception as e:
-                    print(f"终止进程 {pid} 失败: {e}")
+            if platform.system() == 'Windows':
+                cmd = f"Get-WmiObject Win32_Process | Where-Object {{ $_.CommandLine -like '*account_listener.py* {address}*' }} | Stop-Process -Force"
+                subprocess.run(["powershell", "-Command", cmd], capture_output=True)
+                print(f"成功终止监听进程 for {address}")
+            else:
+                find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep | awk '{{print $2}}'"
+                result = subprocess.run(
+                    find_cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True
+                )
+                
+                pids = result.stdout.strip().split('\n')
+                pids = [pid for pid in pids if pid]
+                
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                        print(f"成功终止监听进程 PID: {pid}")
+                    except Exception as e:
+                        print(f"终止进程 {pid} 失败: {e}")
         except Exception as e:
             print(f"查找监听进程时出错: {e}")
         
@@ -297,18 +335,25 @@ def get_copy_trade_status(address):
     is_running = False
     
     # 通过查找进程来判断是否在运行
+    # 通过查找进程来判断是否在运行
     try:
-        find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
-        result = subprocess.run(
-            find_cmd,
-            shell=True,
-            capture_output=True,
-            text=True
-        )
-        
-        # 如果找到进程，说明正在运行
-        if result.stdout.strip():
-            is_running = True
+        if platform.system() == 'Windows':
+            cmd = f"Get-WmiObject Win32_Process | Where-Object {{ $_.CommandLine -like '*account_listener.py* {address}*' }}"
+            result = subprocess.run(["powershell", "-Command", cmd], capture_output=True, text=True)
+            if result.stdout.strip():
+                is_running = True
+        else:
+            find_cmd = f"ps aux | grep 'account_listener.py {address}' | grep -v grep"
+            result = subprocess.run(
+                find_cmd,
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            
+            # 如果找到进程，说明正在运行
+            if result.stdout.strip():
+                is_running = True
     except Exception as e:
         print(f"检查状态时出错: {e}")
     
@@ -352,13 +397,7 @@ def launch_copy_trade():
         # 简单检查：只要还在运行这个脚本，且包含其中一个地址，就视为冲突 (或者您可以设计更复杂的逻辑)
         # 这里为了简化，我们先 kill 掉旧的单一监听器，或者允许并行运行
         
-        # 启动单一终端窗口，传入所有地址 (使用 caffeinate 防休眠)
-        applescript = f'''
-        tell application "Terminal"
-            do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
-            activate
-        end tell
-        '''
+
         
         # [NEW] 同时初始化策略热更新文件
         try:
@@ -368,7 +407,19 @@ def launch_copy_trade():
         except Exception as e:
             print(f"⚠️ 无法写入策略初始配置文件: {e}")
             
-        subprocess.run(['osascript', '-e', applescript])
+        if platform.system() == "Windows":
+            # Windows: 使用 subprocess.Popen 启动新终端
+            cmd = [python_path, listener_script, combined_addresses, strategy_b64]
+            subprocess.Popen(cmd, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            # macOS: 使用 AppleScript
+            applescript = f'''
+            tell application "Terminal"
+                do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
+                activate
+            end tell
+            '''
+            subprocess.run(['osascript', '-e', applescript])
         
         return jsonify({
             "status": "success",
