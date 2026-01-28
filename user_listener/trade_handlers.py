@@ -103,11 +103,34 @@ class RealExecutionHandler(BaseTradeHandler):
             self.trader = PolymarketTrader(private_key, funder_address)
             self.fetcher = PolymarketDataFetcher()
             self.strategy = strategy_config or {"mode": 1, "param": 1.0}
+            self.last_strategy_mtime = 0
             self.my_address = funder_address
             print(f"🚀 [系统] 实盘下单处理器已就绪 | 模式: {self.strategy['mode']} | 参数: {self.strategy['param']}")
         except Exception as e:
             print(f"❌ [系统] 初始化交易模块失败: {e}")
             self.trader = None
+
+    def _reload_strategy(self):
+        """尝试从文件加载最新的策略配置 (带缓存优化)"""
+        try:
+            import os
+            config_path = "monitored_trades/strategy_config.json"
+            if os.path.exists(config_path):
+                # 获取文件修改时间
+                current_mtime = os.path.getmtime(config_path)
+                
+                # 只有当文件被修改过才重新读取
+                if current_mtime > self.last_strategy_mtime:
+                    with open(config_path, 'r') as f:
+                        new_strategy = json.load(f)
+                        # 简单校验
+                        if 'mode' in new_strategy and 'param' in new_strategy:
+                            if new_strategy != self.strategy:
+                                print(f"\n🔄 [策略热更新] 检测到配置变更: {self.strategy} -> {new_strategy}")
+                                self.strategy = new_strategy
+                            self.last_strategy_mtime = current_mtime
+        except Exception as e:
+            print(f"⚠️ 策略热更新失败: {e}")
 
     def handle_trade(self, trade_data: dict, listener_context: dict = None):
         if not self.trader:
@@ -120,22 +143,7 @@ class RealExecutionHandler(BaseTradeHandler):
 
         token_id = trade_data.get('asset')
 
-    def _reload_strategy(self):
-        """尝试从文件加载最新的策略配置"""
-        try:
-            import os
-            config_path = "monitored_trades/strategy_config.json"
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    new_strategy = json.load(f)
-                    # 简单校验
-                    if 'mode' in new_strategy and 'param' in new_strategy:
-                        # 仅当配置真的变化时才打印
-                        if new_strategy != self.strategy:
-                            print(f"\n🔄 [策略热更新] 检测到配置变更: {self.strategy} -> {new_strategy}")
-                            self.strategy = new_strategy
-        except Exception as e:
-            print(f"⚠️ 策略热更新失败: {e}")
+
         side = trade_data.get('side', '').upper()
         trader_shares = float(trade_data.get('size', 0))
         price = float(trade_data.get('price', 0))

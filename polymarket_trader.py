@@ -16,7 +16,7 @@ Polymarket 下单模块
 import json
 import requests
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderArgs, OrderType
+from py_clob_client.clob_types import OrderArgs, OrderType, BalanceAllowanceParams, CreateOrderOptions
 from py_clob_client.order_builder.constants import BUY, SELL
 
 
@@ -117,8 +117,14 @@ class PolymarketTrader:
             token_id=token_id
         )
         
+        # 创建订单选项（重要：包含市场参数）
+        options = CreateOrderOptions(
+            tick_size="0.01",
+            neg_risk=False
+        )
+        
         # 签名订单
-        signed_order = self.client.create_order(order_args)
+        signed_order = self.client.create_order(order_args, options)
         
         # 选择订单类型
         if order_type.upper() == "FOK":
@@ -166,9 +172,91 @@ class PolymarketTrader:
     def cancel_all_orders(self) -> dict:
         """取消所有订单"""
         return self.client.cancel_all()
+    
+    def get_balance(self) -> float:
+        """获取当前账户的 USDC (Collateral) 余额"""
+        try:
+            # 使用 CLOB Client 获取实时余额
+            # asset_type="COLLATERAL" 对应 USDC
+            from py_clob_client.clob_types import BalanceAllowanceParams
+            params = BalanceAllowanceParams(asset_type="COLLATERAL")
+            resp = self.client.get_balance_allowance(params)
+            
+            # 返回结果中 balance 字段即为余额 (USDC 是 6 位小数)
+            if isinstance(resp, dict):
+                raw_balance = float(resp.get("balance", 0))
+                return round(raw_balance / 1_000_000, 2)
+            return 0.0
+        except Exception as e:
+            # 这里的报错如果是 'dict' object has no attribute 'signature_type'
+            # 通常是因为 client 状态异常，我们可以尝试详细打印
+            print(f"❌ 获取 CLOB 余额失败: {e}")
+            return 0.0
 
 
 if __name__ == "__main__":
-    # 测试示例
-    print("Polymarket Trader Module")
-    print("Import and use: from polymarket_trader import PolymarketTrader")
+    import config
+    import time
+    from polymarket_data_fetcher import PolymarketDataFetcher
+    
+    print("\n" + "="*50)
+    print("🧪 Polymarket API 交易功能自测")
+    print("="*50)
+    
+    try:
+        trader = PolymarketTrader(config.PRIVATE_KEY, config.FUNDER_ADDRESS)
+        fetcher = PolymarketDataFetcher()
+        
+        # 1. 检查状态
+        balance = trader.get_balance()
+        print(f"💰 账户余额: ${balance:.2f} USDC")
+        
+        if balance < 5:
+            print("❌ 余额不足 $5，无法进行最小 5 股测试")
+            exit()
+
+        # 2. 动态获取一个当前活跃的 Token 进行测试 (避免 ID 过期)
+        print("🔍 正在寻找全平台最活跃的市场...")
+        trades = fetcher.get_trades(limit=1, silent=True)
+        if trades.empty:
+            print("❌ 无法获取成交数据，请检查网络")
+            exit()
+            
+        target = trades.iloc[0]
+        test_token = target['asset']
+        test_price = target['price']
+        test_title = target.get('title', 'Unknown')
+        
+        print(f"✅ 找到活跃市场: {test_title}")
+        print(f"   Token: {test_token[:20]}...")
+        print(f"   当前参考价: ${test_price}")
+
+        # 3. 提交测试单 (5股，滑点+0.01确保成交)
+        test_side = "BUY"
+        test_size = 5
+        execution_price = round(test_price + 0.01, 2)
+        
+        print(f"\n🚀 准备下单: {test_side} {test_size}股 @ ${execution_price}")
+        confirm = input("⚠️ 是否确认下单？(yes/no): ").strip().lower()
+        
+        if confirm == 'yes':
+            result = trader.place_order(test_token, test_side, test_size, execution_price, order_type="FOK")
+            print(f"\n📦 API 响应内容: \n{json.dumps(result, indent=2, ensure_ascii=False)}")
+            
+            if result.get('success'):
+                print("\n✅ [测试成功] 订单已发出！")
+                if result.get('status') == 'MATCHED':
+                    print("🎉 订单已即时完全成交！")
+                else:
+                    print(f"📝 订单状态: {result.get('status')} (可能进入等待或延迟列表)")
+            else:
+                print(f"\n❌ [测试失败] API 返回错误: {result.get('errorMsg')}")
+        else:
+            print("❌ 测试已手动取消")
+
+    except Exception as e:
+        print(f"\n💥 程序运行出错: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print("\n" + "="*50)

@@ -12,7 +12,7 @@ except ImportError:
 import threading
 
 class AccountListener:
-    def __init__(self, wallet_addresses: list, poll_interval: int = 5):
+    def __init__(self, wallet_addresses: list, poll_interval: int = 3):
         self.fetcher = PolymarketDataFetcher()
         # 统一转为 list 并去重
         if isinstance(wallet_addresses, str):
@@ -104,8 +104,11 @@ class AccountListener:
 
         while self.running:
             try:
-                # 1. 获取最近的交易
-                trades_df = self.fetcher.get_trades(wallet_address=target_address, limit=15, silent=True)
+                # 1. 获取最近的交易 (增加 limit 以更好处理高频并发)
+                trades_df = self.fetcher.get_trades(wallet_address=target_address, limit=50, silent=True)
+                
+                num_fetched = len(trades_df)
+                new_count = 0
                 
                 if not trades_df.empty:
                     # 2. 筛选真正的新交易
@@ -118,6 +121,7 @@ class AccountListener:
                     ]
 
                     if not new_trades_batch.empty:
+                        new_count = len(new_trades_batch)
                         # 3. 更新状态
                         self.state_timestamps[target_address] = max(current_last_ts, new_trades_batch['timestamp'].max())
                         for h in new_trades_batch['transactionHash'].tolist():
