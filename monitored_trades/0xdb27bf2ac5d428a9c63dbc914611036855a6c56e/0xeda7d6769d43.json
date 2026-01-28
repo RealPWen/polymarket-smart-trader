@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-22T21:59:58",
+    "trader": "0xdb27bf2ac5d428a9c63dbc914611036855a6c56e",
+    "market": "Spread: Warriors (-4.5)",
+    "outcome": "Warriors",
+    "side": "BUY",
+    "size": 1854.93,
+    "price": 0.54,
+    "total_usd": 1001.6622000000001,
+    "tx_hash": "0xeda7d6769d43d61868c5c7a533b5de0ed1e14abb6e8a50abe74e02f1866e2866",
+    "condition_id": "0xc22dbe7d922a1ae008a31e5a819a7eec32fff969d1f2a84fc3321ba5081ba489"
+}

@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-23T14:51:48",
+    "trader": "0x6022a1784a55b8070de42d19484bbff95fa7c60a",
+    "market": "Will the US acquire part of Greenland in 2026?",
+    "outcome": "Yes",
+    "side": "BUY",
+    "size": 8.333332,
+    "price": 0.23999991839998694,
+    "total_usd": 1.999999,
+    "tx_hash": "0x486d99779bc05f911f21f17f160c7c07cb23deca9f3361e837d5e52af174212a",
+    "condition_id": "0x890fc3ba40458db0b67560691aa1597344c2a0560d18e80f586a4b35f510b4ce"
+}

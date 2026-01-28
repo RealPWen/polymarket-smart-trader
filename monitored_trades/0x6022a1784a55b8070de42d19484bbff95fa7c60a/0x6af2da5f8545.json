@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-23T17:12:58",
+    "trader": "0x6022a1784a55b8070de42d19484bbff95fa7c60a",
+    "market": "US strikes Iran by February 28, 2026?",
+    "outcome": "Yes",
+    "side": "SELL",
+    "size": 2.18,
+    "price": 0.46,
+    "total_usd": 1.0028000000000001,
+    "tx_hash": "0x6af2da5f85458d812d754900c7f3fd00983c7ace6cebc052d8391cbf1aeeb614",
+    "condition_id": "0x3488f31e6449f9803f99a8b5dd232c7ad883637f1c86e6953305a2ef19c77f20"
+}

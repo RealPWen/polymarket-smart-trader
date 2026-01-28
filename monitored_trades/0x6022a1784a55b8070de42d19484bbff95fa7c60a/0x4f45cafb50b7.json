@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-23T15:29:44",
+    "trader": "0x6022a1784a55b8070de42d19484bbff95fa7c60a",
+    "market": "LoL: CTBC Flying Oyster vs DetonatioN FocusMe (BO3) - LCP Regular Season",
+    "outcome": "CTBC Flying Oyster",
+    "side": "BUY",
+    "size": 5.02564,
+    "price": 0.975,
+    "total_usd": 4.899999,
+    "tx_hash": "0x4f45cafb50b7a00386bb567b56fbbbd48ef7e8e140f910e092ce71b294068e2a",
+    "condition_id": "0xc903ccbd5ef7b87546740a19fc2705df5002b0c4e889a25e84d6d4d10e7881c5"
+}

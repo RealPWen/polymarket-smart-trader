@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-23T14:49:28",
+    "trader": "0x6022a1784a55b8070de42d19484bbff95fa7c60a",
+    "market": "LoL: JD Gaming vs Bilibili Gaming (BO3) - LPL Group Ascend",
+    "outcome": "Bilibili Gaming",
+    "side": "BUY",
+    "size": 1.492536,
+    "price": 0.6699999195999292,
+    "total_usd": 0.999999,
+    "tx_hash": "0x9770ddcecd21e636f1678dd9f132562b16dc11e08c5c3a2e0c6446c28a94ff20",
+    "condition_id": "0xb0f0551126b7918a6cef68612dd87baa6ae9a16a45e88f15ba2921339c00c51c"
+}

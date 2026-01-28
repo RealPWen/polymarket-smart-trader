@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-22T21:59:40",
+    "trader": "0xdb27bf2ac5d428a9c63dbc914611036855a6c56e",
+    "market": "Warriors vs. Mavericks",
+    "outcome": "Warriors",
+    "side": "BUY",
+    "size": 28710.09,
+    "price": 0.66,
+    "total_usd": 18948.6594,
+    "tx_hash": "0x36a41a196f123449aa01a727959a36a3dce8740e72d024991fe1a4d8acd7daa3",
+    "condition_id": "0x7cfc9190536bd923cc459831a87479a5335c59f053188e09b752746292a0993a"
+}

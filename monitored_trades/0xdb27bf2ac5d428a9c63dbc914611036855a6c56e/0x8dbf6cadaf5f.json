@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-24T04:30:46",
+    "trader": "0xdb27bf2ac5d428a9c63dbc914611036855a6c56e",
+    "market": "Spread: Pistons (-4.5)",
+    "outcome": "Rockets",
+    "side": "BUY",
+    "size": 8347.74,
+    "price": 0.51,
+    "total_usd": 4257.3474,
+    "tx_hash": "0x8dbf6cadaf5f63f4f1bd7beee621707253c3eb6985b09917e300d4cadcc3bc5e",
+    "condition_id": "0x53b2770feb289b93560aea66d5bef1774891fdcdefcad3d136a4538224ab28b8"
+}

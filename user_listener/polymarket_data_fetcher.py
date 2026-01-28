@@ -207,6 +207,33 @@ class PolymarketDataFetcher:
         url = f"{self.data_api_base}/value"
         params = {"user": wallet_address}
         return self._make_request_json(url, params, "用户价值")
+
+    def get_user_cash_balance(self, wallet_address: str) -> float:
+        """获取用户的 USDC 现金余额"""
+        try:
+            val_data = self.get_user_value(wallet_address)
+            # 如果返回是列表，取第一个元素
+            if isinstance(val_data, list) and len(val_data) > 0:
+                val_data = val_data[0]
+            
+            if not isinstance(val_data, dict):
+                return 0.0
+                
+            # API 返回字典中可能包含 'cash' 或 'value'
+            # 'cash' 是未下单的余额，'value' 是总市值
+            cash = val_data.get('cash')
+            if cash is not None:
+                return float(cash)
+            
+            # 兜底：如果没找到 cash，看看有没有 value
+            total_value = val_data.get('value')
+            if total_value is not None:
+                return float(total_value)
+                
+            return 0.0
+        except Exception as e:
+            print(f"⚠️ 获取余额失败: {e}")
+            return 0.0
     
     # ==================== Data API - Market Activity ====================
     

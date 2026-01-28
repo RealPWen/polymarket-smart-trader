@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-24T04:28:12",
+    "trader": "0xdb27bf2ac5d428a9c63dbc914611036855a6c56e",
+    "market": "Rockets vs. Pistons",
+    "outcome": "Rockets",
+    "side": "BUY",
+    "size": 9757.07,
+    "price": 0.38,
+    "total_usd": 3707.6866,
+    "tx_hash": "0xf3bd27da7bb81ad18e29f330530e678bebd61a60f255e008803b2fa615f0e17e",
+    "condition_id": "0xbfa2fd19377a3a7cbc2cabd256ff9b17a320ec81a7fe431749500e53ca3ed64a"
+}

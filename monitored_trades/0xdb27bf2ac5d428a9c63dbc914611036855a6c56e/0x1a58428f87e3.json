@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-22T21:59:00",
+    "trader": "0xdb27bf2ac5d428a9c63dbc914611036855a6c56e",
+    "market": "Spread: Timberwolves (-9.5)",
+    "outcome": "Bulls",
+    "side": "BUY",
+    "size": 3137.59,
+    "price": 0.51,
+    "total_usd": 1600.1709,
+    "tx_hash": "0x1a58428f87e35831fb48abc2bd996217ee189d8d6bacb07cab63656a2b81c9ea",
+    "condition_id": "0xe58fc318460ff83429b4cc5530ecd619bdcf7beabdeac94acbaa8af99bd9ea61"
+}

@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-23T16:22:44",
+    "trader": "0x6022a1784a55b8070de42d19484bbff95fa7c60a",
+    "market": "LoL: KT Rolster vs T1 (BO3) - LCK Cup Group Stage",
+    "outcome": "T1",
+    "side": "BUY",
+    "size": 1.234563,
+    "price": 0.8099999756999036,
+    "total_usd": 0.9999960000000001,
+    "tx_hash": "0x51446f8776886e73cc6bc331c26a1615886e368fd8932698a1622ca341a75a93",
+    "condition_id": "0xb629930749fa74d0b66a312e739a36a93609171112cd8e2913f3bebc3711499b"
+}

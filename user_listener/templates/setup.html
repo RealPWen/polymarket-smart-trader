@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>选择跟单策略 - Polymarket Trader</title>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --surface: #1e1e1e;
+            --primary: #007bff;
+            --text: #e0e0e0;
+            --border: #333;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 12px;
+            width: 450px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #fff;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #2c2c2c;
+            border: 1px solid var(--border);
+            color: #fff;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .strategy-card {
+            background: #2a2a2a;
+            border: 1px solid transparent;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .strategy-card:hover {
+            border-color: #555;
+        }
+
+        .strategy-card.active {
+            border-color: var(--primary);
+            background: rgba(0, 123, 255, 0.1);
+        }
+
+        .strategy-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .strategy-desc {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .param-input {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .active .param-input {
+            display: block;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background: #0069d9;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container" style="width: 500px;">
+        <h2>配置多路跟单策略</h2>
+
+        <div id="address-container">
+            <div class="form-group address-group" style="position: relative;">
+                <label>目标交易员地址</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="trader-address" placeholder="0x..." value="">
+                    <button onclick="addAddressField()"
+                        style="width: 40px; margin: 0; padding: 0 10px; background: #333;">+</button>
+                </div>
+            </div>
+        </div>
+
+        <label>选择全局策略模式</label>
+
+        <div class="strategy-card active" onclick="selectStrategy(1)" id="card-1">
+            <span class="strategy-title">1. 按金额比例 (Amount Ratio)</span>
+            <span class="strategy-desc">对方下 100 U，你下 100 * 比例</span>
+            <div class="param-input">
+                <input type="text" id="param-1" placeholder="输入比例 (例如 0.1)" value="1.0"
+                    onclick="event.stopPropagation()">
+            </div>
+        </div>
+
+        <div class="strategy-card" onclick="selectStrategy(2)" id="card-2">
+            <span class="strategy-title">2. 按仓位占比 (Portfolio Ratio)</span>
+            <span class="strategy-desc">基于总余额计算 (仅限单人跟单使用)</span>
+            <div id="mode-2-warning" style="display:none; font-size: 10px; color: #ff4444; margin-top: 4px;">⚠️
+                多人跟单模式下禁用此项</div>
+        </div>
+
+        <div class="strategy-card" onclick="selectStrategy(3)" id="card-3">
+            <span class="strategy-title">3. 恒定金额 (Constant Amount)</span>
+            <span class="strategy-desc">无论对方下多少，你固定下 USD 金额</span>
+            <div class="param-input">
+                <input type="text" id="param-3" placeholder="输入金额 (USD)" value="50.0" onclick="event.stopPropagation()">
+            </div>
+        </div>
+
+        <div
+            style="background: rgba(255, 188, 0, 0.1); border: 1px solid rgba(255, 188, 0, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 0; font-size: 13px; color: #ffbc00; line-height: 1.5;">
+                ⚠️ <b>下单门槛：</b>根据 Polymarket 限制，每笔成交必须<b>大于 5 股 (shares)</b>。如果计算出的股数不足 5 股，订单将无法成交。
+            </p>
+        </div>
+
+        <div class="form-group" style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
+            <label>订单类型 (Order Type)</label>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <div class="strategy-card active" onclick="selectOrderType('FOK')" id="type-FOK"
+                    style="flex: 1; margin-bottom: 0; text-align: center;">
+                    <span class="strategy-title">市价单 (FOK)</span>
+                    <span class="strategy-desc" style="display: block; margin-top: 5px;">即时成交，滑点保护(+0.01)</span>
+                </div>
+                <div class="strategy-card" onclick="selectOrderType('GTC')" id="type-GTC"
+                    style="flex: 1; margin-bottom: 0; text-align: center;">
+                    <span class="strategy-title">限价单 (GTC)</span>
+                    <span class="strategy-desc" style="display: block; margin-top: 5px;">原价跟单，成交率较低</span>
+                </div>
+            </div>
+            <p id="limit-note" style="display: none; font-size: 12px; color: #ffbc00; margin-top: 10px;">
+                ⚠️ 提示：限价单除了受 5 股起投限制外，在价格跳动时极难成交。建议仅在熟悉市场深度时使用。
+            </p>
+        </div>
+
+        <button onclick="launchTrade()">确认并启动跟单</button>
+    </div>
+
+    <script>
+        let selectedMode = 1;
+        let selectedOrderType = 'FOK';
+
+        // 从 URL 获取地址预填 (支持多地址逗号分隔)
+        const urlParams = new URLSearchParams(window.location.search);
+        const prefillAddress = urlParams.get('address');
+        if (prefillAddress) {
+            const addresses = prefillAddress.split(',').filter(a => a.startsWith('0x'));
+            const container = document.getElementById('address-container');
+
+            // 清空默认的第一个框 (如果需要的话，或者直接用它填第一个)
+            const firstInput = container.querySelector('.trader-address');
+            if (addresses.length > 0) {
+                firstInput.value = addresses[0];
+                // 为剩下的地址创建新的输入框
+                for (let i = 1; i < addresses.length; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'form-group address-group';
+                    div.style.marginTop = '10px';
+                    div.innerHTML = `
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" class="trader-address" placeholder="0x..." value="${addresses[i]}">
+                            <button onclick="removeAddressField(this)" style="width: 40px; margin: 0; padding: 0 10px; background: #d50000; color: white;">-</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                }
+            }
+        }
+        checkModeAvailability(); // 初始检查策略可用性
+
+        function addAddressField() {
+            const container = document.getElementById('address-container');
+            const div = document.createElement('div');
+            div.className = 'form-group address-group';
+            div.style.marginTop = '10px';
+            div.innerHTML = `
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="trader-address" placeholder="0x..." value="">
+                    <button onclick="removeAddressField(this)" style="width: 40px; margin: 0; padding: 0 10px; background: #d50000; color: white;">-</button>
+                </div>
+            `;
+            container.appendChild(div);
+            checkModeAvailability();
+        }
+
+        function removeAddressField(btn) {
+            btn.closest('.address-group').remove();
+            checkModeAvailability();
+        }
+
+        function checkModeAvailability() {
+            const addrCount = document.querySelectorAll('.trader-address').length;
+            const card2 = document.getElementById('card-2');
+            const warning = document.getElementById('mode-2-warning');
+
+            if (addrCount > 1) {
+                card2.style.opacity = '0.5';
+                card2.style.pointerEvents = 'none';
+                warning.style.display = 'block';
+                if (selectedMode === 2) selectStrategy(1); // 强制切回 mode 1
+            } else {
+                card2.style.opacity = '1';
+                card2.style.pointerEvents = 'auto';
+                warning.style.display = 'none';
+            }
+        }
+
+        function selectStrategy(mode) {
+            selectedMode = mode;
+            document.querySelectorAll('[id^="card-"]').forEach(el => el.classList.remove('active'));
+            document.getElementById(`card-${mode}`).classList.add('active');
+        }
+
+        function selectOrderType(type) {
+            selectedOrderType = type;
+            document.querySelectorAll('[id^="type-"]').forEach(el => el.classList.remove('active'));
+            document.getElementById(`type-${type}`).classList.add('active');
+            document.getElementById('limit-note').style.display = (type === 'GTC') ? 'block' : 'none';
+        }
+
+        async function launchTrade() {
+            const addressInputs = document.querySelectorAll('.trader-address');
+            const addresses = Array.from(addressInputs).map(i => i.value.trim()).filter(a => a.startsWith('0x'));
+
+            if (addresses.length === 0) return alert("请输入至少一个有效的交易员地址 (0x...)");
+
+            let param = 1.0;
+            if (selectedMode === 1) param = parseFloat(document.getElementById('param-1').value) || 1.0;
+            if (selectedMode === 3) param = parseFloat(document.getElementById('param-3').value) || 50.0;
+
+            const payload = {
+                addresses: addresses, // 改为複数形式
+                strategy: {
+                    mode: selectedMode,
+                    param: param,
+                    order_type: selectedOrderType
+                }
+            };
+
+            const btn = document.querySelector('button');
+            const originalText = btn.innerText;
+            btn.innerText = `正在启动 ${addresses.length} 路跟单...`;
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/copy-trade/launch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.status === 'launched' || data.status === 'success') {
+                    // 跳转到仪表盘，address 依然是第一个，但传递全部 addresses 到 dashboard
+                    const addrParam = addresses.join(',');
+                    window.location.href = `/copy-trade/dashboard?address=${addrParam}&mode=${selectedMode}&param=${param}&order_type=${selectedOrderType}`;
+                } else {
+                    alert("启动失败: " + (data.error || JSON.stringify(data)));
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                alert("请求错误: " + e.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+
+</body>
+
+</html>

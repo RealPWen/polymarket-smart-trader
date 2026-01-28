@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>跟单仪表盘 - Polymarket Trader</title>
+    <!-- 引入 Plotly for 曲线 -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --surface: #1e1e1e;
+            --panel-bg: #252525;
+            --primary: #007bff;
+            --success: #00c853;
+            --danger: #d50000;
+            --text: #e0e0e0;
+            --border: #333;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: var(--surface);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .status-badge {
+            background: rgba(0, 200, 83, 0.2);
+            color: var(--success);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        /* 三列布局 */
+        .dashboard-container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        /* 左右列宽固定，中间自适应 */
+        .col-left,
+        .col-right {
+            width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .col-center {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex: 1;
+            /* 让面板填满列的高度 */
+        }
+
+        .panel-short {
+            flex: 0 0 auto;
+            /* 高度自适应内容 */
+        }
+
+        .panel-header {
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .panel-content {
+            padding: 15px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* 订单列表 */
+        .trade-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+        }
+
+        .trade-item:last-child {
+            border-bottom: none;
+        }
+
+        .tag-buy {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .tag-sell {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .trade-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .trade-meta {
+            color: #888;
+            font-size: 11px;
+        }
+
+        /* 余额展示 */
+        .balance-box {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .balance-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .balance-label {
+            color: #888;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .addr-tag {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        /* 开关样式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #444;
+            transition: .3s;
+            border-radius: 20px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--primary);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(14px);
+        }
+
+        /* NEW 标签样式 */
+        .badge-new {
+            background: var(--success);
+            color: #000;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-right: 6px;
+            text-transform: uppercase;
+            animation: blink 1.5s infinite;
+            vertical-align: middle;
+            display: inline-block;
+        }
+
+        @keyframes blink {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* 增量行高亮动画 */
+        @keyframes highlight-new {
+            from {
+                background-color: rgba(0, 200, 83, 0.1);
+            }
+
+            to {
+                background-color: transparent;
+            }
+        }
+
+        .item-new-entry {
+            animation: highlight-new 5s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <h3 style="margin:0;">Polymarket 跟单监控台</h3>
+            <div class="status-badge"><span class="dot"></span> 系统运行中</div>
+
+            <!-- 新增：策略信息展示 -->
+            <div id="strategy-info"
+                style="margin-left: 20px; padding-left: 20px; border-left: 1px solid #444; display: flex; gap: 20px; align-items: center;">
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 10px; color: #888; text-transform: uppercase;">当前策略 <span
+                            onclick="openStrategyEdit()" style="cursor: pointer; color: var(--primary);">✎
+                            编辑</span></span>
+                    <span id="display-strategy"
+                        style="font-size: 13px; color: var(--primary); font-weight: bold;">--</span>
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 10px; color: #888; text-transform: uppercase;">执行参数</span>
+                    <span id="display-param" style="font-size: 13px; color: #fff; font-family: monospace;">--</span>
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 10px; color: #888; text-transform: uppercase;">订单类型</span>
+                    <span id="display-type" style="font-size: 13px; color: #fff;">--</span>
+                </div>
+            </div>
+        </div>
+        <div style="font-size: 12px; color: #888;">
+            正在监控: <span id="target-addr" style="color: #fff; font-family: monospace;">...</span>
+            <span onclick="openAddressEdit()" style="cursor: pointer; color: var(--primary); margin-left: 8px;">✎
+                管理</span>
+        </div>
+    </div>
+
+    <div class="dashboard-container">
+
+        <!-- 左侧: 我的账户信息 -->
+        <div class="col-left">
+            <div class="panel panel-short">
+                <div class="panel-header">我的资金账户 (USDC)</div>
+                <div class="panel-content balance-box">
+                    <div class="balance-value" id="my-balance">Loading...</div>
+                    <div class="balance-label">可用余额</div>
+                    <div class="addr-tag" id="my-address">Loading...</div>
+                </div>
+            </div>
+
+            <div class="panel" style="flex: 1;">
+                <div class="panel-header">我的现有持仓 (My Positions)</div>
+                <div class="panel-content" id="my-positions-list">
+                    <div style="text-align: center; color: #666; padding: 20px;">暂无持仓</div>
+                </div>
+            </div>
+
+            <div class="panel" style="flex: 1;">
+                <div class="panel-header">我的成交历史 (My Executions)</div>
+                <div class="panel-content" id="my-trades-list">
+                    <!-- JS 动态填充 -->
+                    <div style="text-align: center; color: #666; padding: 20px;">暂无跟单记录</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间: 收益曲线对比 -->
+        <div class="col-center" style="display: flex; flex-direction: column;">
+            <!-- 我的总收益曲线 (始终固定在顶部) -->
+            <div class="panel" style="flex: 2; min-height: 300px;">
+                <div class="panel-header">
+                    <span>我的账户累计总收益 (Overall PnL)</span>
+                    <span id="my-pnl-total" style="font-size: 12px; color: var(--success);">--</span>
+                </div>
+                <div class="panel-content" style="padding: 0; overflow: hidden; display: flex;">
+                    <div id="my-pnl-chart" style="flex: 1; width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- 目标对比容器：JS 将动态向此容器添加各个交易员的图表 -->
+            <div id="target-charts-container"
+                style="flex: 3; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-bottom: 20px;">
+                <!-- JS 动态填充 -->
+            </div>
+        </div>
+
+        <!-- 右侧: 监测目标流 -->
+        <div class="col-right">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>目标交易员订单流 (Target Stream)</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 10px; font-weight: normal; color: #888;">声音提醒</span>
+                        <label class="switch">
+                            <input type="checkbox" id="sound-toggle" onchange="toggleSoundPref()">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="panel-content" id="target-trades-list">
+                    <!-- JS 动态填充 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 策略编辑弹窗 -->
+    <div id="strategy-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center;">
+        <div
+            style="background: var(--surface); padding: 30px; border-radius: 12px; width: 400px; border: 1px solid var(--border);">
+            <h3 style="margin-top: 0; margin-bottom: 20px;">修改跟单策略</h3>
+
+            <label style="display: block; margin-bottom: 10px; font-size: 12px; color: #aaa;">选择模式</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="edit-mode-1" class="edit-mode-btn" data-mode="1" onclick="selectEditMode(1)"
+                    style="flex: 1; padding: 10px; background: #333; border: 1px solid transparent; color: #fff; cursor: pointer; border-radius: 4px;">金额比例</button>
+                <button id="edit-mode-2" class="edit-mode-btn" data-mode="2" onclick="selectEditMode(2)"
+                    style="flex: 1; padding: 10px; background: #333; border: 1px solid transparent; color: #fff; cursor: pointer; border-radius: 4px;">仓位占比</button>
+                <button id="edit-mode-3" class="edit-mode-btn" data-mode="3" onclick="selectEditMode(3)"
+                    style="flex: 1; padding: 10px; background: #333; border: 1px solid transparent; color: #fff; cursor: pointer; border-radius: 4px;">恒定金额</button>
+            </div>
+
+            <label id="edit-param-label" style="display: block; margin-bottom: 8px; font-weight: bold;">参数数值</label>
+            <input type="number" id="edit-param"
+                style="width: 100%; padding: 10px; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px; box-sizing: border-box; margin-bottom: 25px;">
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeStrategyEdit()"
+                    style="flex: 1; padding: 12px; background: transparent; border: 1px solid #555; color: #fff; border-radius: 4px; cursor: pointer;">取消</button>
+                <button id="save-strat-btn" onclick="saveStrategy()"
+                    style="flex: 1; padding: 12px; background: var(--primary); border: none; color: #fff; border-radius: 4px; cursor: pointer;">确认修改</button>
+            </div>
+
+            <style>
+                .edit-mode-btn.active {
+                    background: rgba(0, 123, 255, 0.2) !important;
+                    border-color: var(--primary) !important;
+                    color: var(--primary) !important;
+                }
+            </style>
+        </div>
+    </div>
+
+    <!-- 地址管理弹窗 -->
+    <div id="address-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center;">
+        <div
+            style="background: var(--surface); padding: 30px; border-radius: 12px; width: 500px; border: 1px solid var(--border);">
+            <h3 style="margin-top: 0; margin-bottom: 20px;">管理监控目标</h3>
+
+            <div id="addr-list-container"
+                style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                <!-- JS 动态填充 -->
+            </div>
+
+            <button onclick="addAddressInput()"
+                style="width: 100%; padding: 8px; border: 1px dashed #555; background: rgba(255,255,255,0.05); color: #aaa; cursor: pointer; margin-bottom: 25px;">+
+                添加新地址</button>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeAddressEdit()"
+                    style="flex: 1; padding: 12px; background: transparent; border: 1px solid #555; color: #fff; border-radius: 4px; cursor: pointer;">取消</button>
+                <button id="save-addr-btn" onclick="saveAddresses()"
+                    style="flex: 1; padding: 12px; background: var(--primary); border: none; color: #fff; border-radius: 4px; cursor: pointer;">保存并重启</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 内置提示音 (Base64) -->
+    <audio id="notif-sound"
+        src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTdvT19"></audio>
+    <script>
+        const dingUrl = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+        document.getElementById('notif-sound').src = dingUrl;
+
+        // URL 参数解析
+        const params = new URLSearchParams(window.location.search);
+        let addressList = (params.get('address') || "").split(',').filter(a => a.startsWith('0x'));
+        const mode = params.get('mode');
+        const param = params.get('param');
+
+        // --- 地址管理逻辑 ---
+        function openAddressEdit() {
+            const modal = document.getElementById('address-modal');
+            const container = document.getElementById('addr-list-container');
+            container.innerHTML = ''; // 清空
+
+            addressList.forEach(addr => addAddressInput(addr));
+            if (addressList.length === 0) addAddressInput(); // 至少显示一个
+
+            modal.style.display = 'flex';
+        }
+
+        function closeAddressEdit() {
+            document.getElementById('address-modal').style.display = 'none';
+        }
+
+        function addAddressInput(value = "") {
+            const div = document.createElement('div');
+            div.style.cssText = "display: flex; gap: 8px;";
+            div.innerHTML = `
+                <input type="text" class="addr-input" value="${value}" placeholder="0x..." style="flex: 1; padding: 10px; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;">
+                <button onclick="this.parentElement.remove()" style="padding: 0 15px; background: #333; color: #ff1744; border: 1px solid #444; border-radius: 4px; cursor: pointer;">✕</button>
+            `;
+            document.getElementById('addr-list-container').appendChild(div);
+        }
+
+        async function saveAddresses() {
+            const inputs = document.querySelectorAll('.addr-input');
+            const newAddresses = Array.from(inputs).map(i => i.value.trim()).filter(a => a.startsWith('0x'));
+
+            if (newAddresses.length === 0) {
+                alert("请至少保留一个有效地址");
+                return;
+            }
+
+            const btn = document.getElementById('save-addr-btn');
+            btn.innerText = "正在重启服务...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copy-trade/update-clients', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ addresses: newAddresses })
+                });
+                const data = await res.json();
+
+                if (data.status === 'restarted') {
+                    alert("服务已重启！页面即将刷新...");
+                    // 构造新的 URL 并刷新
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('address', newAddresses.join(','));
+                    window.location.href = newUrl.toString();
+                } else {
+                    alert("更新失败: " + data.error);
+                    btn.innerText = "保存并重启";
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                alert("请求错误: " + e);
+                btn.innerText = "保存并重启";
+                btn.disabled = false;
+            }
+        }
+
+        const orderType = params.get('order_type');
+        let myWalletAddress = null;
+
+        // 更新顶部策略展示
+        if (mode) {
+            const modeNames = { '1': '金额比例 (Ratio)', '2': '仓位占比 (Portfolio)', '3': '恒定金额 (Constant)' };
+            document.getElementById('display-strategy').innerText = modeNames[mode] || '自定义';
+            let pText = '--';
+            if (mode === '1') pText = 'x' + param;
+            if (mode === '2') pText = '自动计算';
+            if (mode === '3') pText = '$' + param;
+            document.getElementById('display-param').innerText = pText;
+        }
+        if (orderType) document.getElementById('display-type').innerText = orderType;
+        document.getElementById('target-addr').innerText = addressList.length > 1 ? `${addressList.length} 个地址` : addressList[0];
+
+        // --- 动态生成目标曲线 UI ---
+        const targetContainer = document.getElementById('target-charts-container');
+        addressList.forEach((addr, index) => {
+            const html = `
+                <div class="panel" style="flex: none; height: 250px;">
+                    <div class="panel-header">
+                        <span>跟踪: ${addr.slice(0, 8)}...${addr.slice(-6)}</span>
+                        <span id="total-pnl-${addr}" style="font-size: 12px; color: var(--primary);">--</span>
+                    </div>
+                    <div class="panel-content" style="padding: 0; display: flex;">
+                        <div id="chart-${addr}" style="flex: 1; width: 100%;"></div>
+                    </div>
+                </div>
+            `;
+            targetContainer.insertAdjacentHTML('beforeend', html);
+        });
+
+        // --- 状态与追踪 ---
+        const lastState = { balance: "", positions: "", executions: "", targetStream: "" };
+        const knownHashes = { executions: new Set(), targetStream: new Set() };
+        let initialLoadDone = { executions: false, targetStream: false };
+
+        // 定时刷新
+        setInterval(() => {
+            fetchMyBalance();
+            fetchTargetStreamAggregate();
+            // updateCharts(); // 移除无脑轮询，改为按需触发
+        }, 5000);
+
+        function playNotification() {
+            const audio = document.getElementById('notif-sound');
+            if (audio) { audio.currentTime = 0; audio.play().catch(e => { }); }
+        }
+
+        async function fetchMyBalance() {
+            try {
+                const res = await fetch('/api/my-balance');
+                const data = await res.json();
+                const str = JSON.stringify(data);
+
+                // 优化：只有当余额变化（或初始化）时，才去查询持仓和订单流
+                if (str === lastState.balance) return;
+
+                console.log("💰 余额变化检测: ", lastState.balance, "->", str);
+                lastState.balance = str;
+
+                if (data.cash !== undefined) {
+                    document.getElementById('my-balance').innerText = '$' + data.cash.toFixed(2);
+                    document.getElementById('my-address').innerText = data.address.slice(0, 6) + '...' + data.address.slice(-4);
+
+                    const isFirst = (myWalletAddress === null);
+                    myWalletAddress = data.address;
+
+                    // 触发级联更新
+                    fetchMyPositions();
+                    fetchMyExecutions();
+                    // 更新我的 PnL 曲线
+                    fetchAnalysis(myWalletAddress, 'my-pnl-chart', 'my-pnl-total', '#00c853');
+
+                    if (isFirst) {
+                        // 首次加载时，也强制刷新一下目标图表
+                        updateTargetCharts();
+                    }
+                }
+            } catch (e) { }
+        }
+
+        function updateTargetCharts() {
+            addressList.forEach(addr => {
+                fetchAnalysis(addr, `chart-${addr}`, `total-pnl-${addr}`, '#007bff');
+            });
+        }
+
+        async function updateCharts() {
+            // 保留此函数用于 resize 事件，但不用于轮询
+            if (myWalletAddress) fetchAnalysis(myWalletAddress, 'my-pnl-chart', 'my-pnl-total', '#00c853');
+            updateTargetCharts();
+        }
+
+        async function fetchAnalysis(addr, chartId, totalId, color) {
+            try {
+                const res = await fetch(`/api/analysis/${addr}`);
+                const data = await res.json();
+                if (data.pnl_history && data.pnl_history.length > 0) {
+                    const x = data.pnl_history.map(d => d.date);
+                    const y = data.pnl_history.map(d => d.cumulative_pnl);
+                    const lastPnl = y[y.length - 1];
+                    const el = document.getElementById(totalId);
+                    if (el) {
+                        el.innerText = (lastPnl >= 0 ? '+' : '') + '$' + lastPnl.toFixed(2);
+                        el.style.color = lastPnl >= 0 ? '#00c853' : '#ff1744';
+                    }
+                    Plotly.react(chartId, [{
+                        x: x, y: y, type: 'scatter', mode: 'lines+markers',
+                        marker: { size: 4, opacity: 0.5 },
+                        fill: 'tozeroy',
+                        line: { color: color, width: 3, shape: 'spline' },
+                        fillcolor: color === '#00c853' ? 'rgba(0,200,83,0.1)' : 'rgba(0,123,255,0.1)'
+                    }], {
+                        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                        font: { color: '#888', size: 10 },
+                        margin: { t: 5, r: 25, l: 35, b: 30 },
+                        xaxis: { gridcolor: '#222', showgrid: true, zeroline: false },
+                        yaxis: { gridcolor: '#222', showgrid: true, zeroline: true, zerolinecolor: '#444', tickprefix: '$' },
+                        autosize: true
+                    }, { responsive: true, displayModeBar: false });
+                }
+            } catch (e) { }
+        }
+
+        async function fetchTargetStreamAggregate() {
+            try {
+                // 并发请求所有地址的流
+                const results = await Promise.all(addressList.map(addr => fetch(`/stream/${addr}`).then(r => r.json())));
+                // 合并并平铺
+                let allTrades = [];
+                results.forEach((list, i) => {
+                    const traderTag = addressList[i].slice(0, 6);
+                    list.forEach(t => {
+                        t._trader = traderTag; // 标记来源
+                        allTrades.push(t);
+                    });
+                });
+
+                // 按日期排序 (最新在前)
+                allTrades.sort((a, b) => new Date(b.date_str) - new Date(a.date_str));
+
+                const dataStr = JSON.stringify(allTrades);
+                if (initialLoadDone.targetStream && dataStr !== lastState.targetStream) {
+                    if (localStorage.getItem('enable_sound') === 'true') playNotification();
+
+                    // 目标流有更新 -> 更新目标图表
+                    console.log("🌊 目标流更新，刷新图表...");
+                    updateTargetCharts();
+                }
+
+                if (dataStr === lastState.targetStream) return;
+                lastState.targetStream = dataStr;
+
+                const container = document.getElementById('target-trades-list');
+                container.innerHTML = allTrades.map(t => {
+                    const isNew = initialLoadDone.targetStream && !knownHashes.targetStream.has(t.transactionHash);
+                    knownHashes.targetStream.add(t.transactionHash);
+                    return `
+                    <div class="trade-item ${isNew ? 'item-new-entry' : ''}">
+                        <div class="trade-info">
+                            <span style="color: #fff; font-size: 11px;">
+                                <span style="color:var(--primary); font-weight:bold;">[${t._trader}]</span> 
+                                ${isNew ? '<span class="badge-new">NEW</span>' : ''}
+                                ${t.title.slice(0, 20)}...
+                            </span>
+                            <div style="margin-top:2px;">
+                                <span class="${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.side}</span>
+                                <span>${t.outcome}</span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="display:block; font-weight:bold;">$${(t.size * t.price).toFixed(2)}</span>
+                            <span class="trade-meta">${t.date_str.split(' ')[1]}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                initialLoadDone.targetStream = true;
+            } catch (e) { }
+        }
+
+        async function fetchMyExecutions() {
+            try {
+                const res = await fetch('/api/my-executions');
+                const data = await res.json();
+                if (JSON.stringify(data) === lastState.executions) return;
+                lastState.executions = JSON.stringify(data);
+                const container = document.getElementById('my-trades-list');
+                container.innerHTML = data.map(t => {
+                    const id = t.timestamp + t.side + t.size;
+                    const isNew = initialLoadDone.executions && !knownHashes.executions.has(id);
+                    knownHashes.executions.add(id);
+                    return `
+                    <div class="trade-item ${isNew ? 'item-new-entry' : ''}">
+                        <div class="trade-info">
+                            <span style="color: #fff; font-size: 11px; font-weight: bold;">
+                                ${isNew ? '<span class="badge-new">NEW</span>' : ''}
+                                ${t.market_title.slice(0, 25)}
+                            </span>
+                            <div><span class="${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.side}</span> ${t.size} 股</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="display:block; font-weight:bold;">$${t.my_target_amount.toFixed(2)}</span>
+                            <span class="trade-meta">${t.date_str.split(' ')[1]}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                initialLoadDone.executions = true;
+            } catch (e) { }
+        }
+
+        async function fetchMyPositions() {
+            try {
+                const res = await fetch('/api/my-positions');
+                const data = await res.json();
+                const dataStr = JSON.stringify(data);
+
+                if (dataStr === lastState.positions) return;
+                lastState.positions = dataStr;
+
+                const container = document.getElementById('my-positions-list');
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">暂无持仓</div>';
+                    return;
+                }
+                container.innerHTML = data.map(p => `
+                    <div class="trade-item">
+                        <div class="trade-info">
+                            <span style="color: #fff; font-weight: bold; font-size: 11px;">${(p.title || 'Unknown').slice(0, 40)}</span>
+                            <span style="color: #aaa; font-size: 10px;">${p.outcome || 'N/A'}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="display:block; font-weight:bold; color: #fff;">${parseFloat(p.size).toFixed(2)} 股</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+        function toggleSoundPref() {
+            const checked = document.getElementById('sound-toggle').checked;
+            localStorage.setItem('enable_sound', checked ? 'true' : 'false');
+            if (checked) playNotification();
+        }
+
+        // --- 策略编辑相关 ---
+        let currentStrategy = { mode: 1, param: 1.0 }; // 默认
+
+        // 页面加载时初始化 (从 URL 这里其实拿不到最新的，如果有更持久的存储更好，这里先用 URL 兜底)
+        if (mode) currentStrategy.mode = parseInt(mode);
+        if (param) currentStrategy.param = parseFloat(param);
+
+        function openStrategyEdit() {
+            const modal = document.getElementById('strategy-modal');
+            modal.style.display = 'flex';
+
+            // 选中当前模式
+            document.getElementById(`edit-mode-${currentStrategy.mode}`).click();
+            document.getElementById('edit-param').value = currentStrategy.param;
+        }
+
+        function closeStrategyEdit() {
+            document.getElementById('strategy-modal').style.display = 'none';
+        }
+
+        function selectEditMode(m) {
+            document.querySelectorAll('.edit-mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`edit-mode-${m}`).classList.add('active');
+
+            const label = document.getElementById('edit-param-label');
+            if (m === 1) label.innerText = "跟单比例 (0.1 - 10.0)";
+            if (m === 2) label.innerText = "仓位占比 (0.1 = 10%) [单人模式]";
+            if (m === 3) label.innerText = "单笔固定金额 (USD)";
+        }
+
+        async function saveStrategy() {
+            const modeBtn = document.querySelector('.edit-mode-btn.active');
+            const newMode = parseInt(modeBtn.dataset.mode);
+            const newParam = parseFloat(document.getElementById('edit-param').value);
+
+            if (isNaN(newParam) || newParam <= 0) {
+                alert("请输入有效的参数数值");
+                return;
+            }
+
+            const payload = {
+                mode: newMode,
+                param: newParam
+            };
+
+            const btn = document.getElementById('save-strat-btn');
+            btn.innerText = "保存中...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copy-trade/update-strategy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.status === 'updated') {
+                    // 更新本地状态和 UI
+                    currentStrategy = payload;
+
+                    const modeNames = { '1': '金额比例 (Ratio)', '2': '仓位占比 (Portfolio)', '3': '恒定金额 (Constant)' };
+                    document.getElementById('display-strategy').innerText = modeNames[newMode] || '自定义';
+
+                    let pText = '--';
+                    if (newMode === 1) pText = 'x' + newParam;
+                    if (newMode === 2) pText = (newParam * 100).toFixed(0) + '%';
+                    if (newMode === 3) pText = '$' + newParam;
+                    document.getElementById('display-param').innerText = pText;
+
+                    closeStrategyEdit();
+                    alert("策略更新成功！下一次跟单将应用新参数。");
+                } else {
+                    alert("更新失败: " + data.error);
+                }
+            } catch (e) {
+                alert("请求错误: " + e);
+            } finally {
+                btn.innerText = "确认修改";
+                btn.disabled = false;
+            }
+        }
+
+
+        // --- 新增：响应式布局适配 ---
+        window.addEventListener('resize', () => {
+            updateCharts();
+        });
+
+        fetchMyBalance().then(() => {
+            const saved = localStorage.getItem('enable_sound');
+            if (saved === 'true') document.getElementById('sound-toggle').checked = true;
+            // 初始也拉一下，防止 Balance 刚开始一样导致不触发
+            fetchMyPositions();
+            fetchMyExecutions();
+            fetchTargetStreamAggregate();
+        });
+    </script>
+</body>
+
+</html>

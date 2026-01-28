@@ -1,0 +1,12 @@
+{
+    "timestamp": "2026-01-23T15:04:52",
+    "trader": "0x6022a1784a55b8070de42d19484bbff95fa7c60a",
+    "market": "Will Apple be the third-largest company in the world by market cap on January 31?",
+    "outcome": "Yes",
+    "side": "BUY",
+    "size": 1.047111,
+    "price": 0.954999995224957,
+    "total_usd": 0.9999909999999999,
+    "tx_hash": "0x9861ccb87edf2a2b57d1ddfcf0933c51d52d3e79767c5eca1cd198c559c33bef",
+    "condition_id": "0xe8e39f2bf0a2368a6dc208fa452fe6456483855799eaa42e055f2b5ecadd2475"
+}
