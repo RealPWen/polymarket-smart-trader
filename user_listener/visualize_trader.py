@@ -9,10 +9,12 @@ import pandas as pd
 import json
 import plotly.graph_objects as go
 from trader_analyzer import TraderAnalyzer
+from strategy_analysis import FixedBetStrategyAnalyzer
 
 class TraderVisualizer:
     def __init__(self):
         self.analyzer = TraderAnalyzer()
+        self.strategy_analyzer = FixedBetStrategyAnalyzer()
 
     def analyze_and_get_html(self, address_input: str, limit: int = 50000):
         # 支持逗号分隔的多地址分析
@@ -22,20 +24,31 @@ class TraderVisualizer:
             addr = addresses[0]
             print(f"📊 正在深度分析交易员: {addr} ...")
             analysis_df, trades_df, active_df = self.analyzer.analyze_trader(addr, limit)
-            return self.get_professional_report_html([addr], {addr: (analysis_df, trades_df, active_df)})
+            # 策略收益分析
+            strategy_df, _, _, strategy_stats = self.strategy_analyzer.analyze_strategy(addr, limit=5000)
+            return self.get_professional_report_html([addr], {addr: (analysis_df, trades_df, active_df)}, {addr: strategy_df})
         else:
             print(f"📊 正在并行分析 {len(addresses)} 个交易员 ...")
             data_map = {}
+            strategy_map = {}
             for addr in addresses:
                 data_map[addr] = self.analyzer.analyze_trader(addr, limit)
-            return self.get_professional_report_html(addresses, data_map)
+                strategy_df, _, _, _ = self.strategy_analyzer.analyze_strategy(addr, limit=5000)
+                strategy_map[addr] = strategy_df
+            return self.get_professional_report_html(addresses, data_map, strategy_map)
 
-    def get_professional_report_html(self, addresses, data_map):
+    def get_professional_report_html(self, addresses, data_map, strategy_map=None):
         """生成支持多交易员对比的 HTML 报告"""
         
-        # 1. 准备聚合 PnL 图表
+        if strategy_map is None:
+            strategy_map = {}
+        
+        # 1. 准备聚合 PnL 图表 (历史收益)
         fig_pnl = go.Figure()
         colors = ['#2962ff', '#00c853', '#ff3d00', '#ff9100', '#9c27b0']
+        
+        # 2. 准备策略收益图表
+        fig_strategy = go.Figure()
         
         all_traders_html = ""
         
@@ -43,13 +56,23 @@ class TraderVisualizer:
             analysis_df, trades_df, active_df = data_map[addr]
             color = colors[i % len(colors)]
             
-            # 添加到聚合图表
+            # 添加到历史收益图表
             if not analysis_df.empty:
                 fig_pnl.add_trace(go.Scatter(
                     x=analysis_df['date'], y=analysis_df['cumulative_pnl'],
                     mode='lines',
                     line=dict(color=color, width=2),
                     name=f"Trader {addr[:8]}..."
+                ))
+            
+            # 添加到策略收益图表
+            strategy_df = strategy_map.get(addr, pd.DataFrame())
+            if not strategy_df.empty and 'cumulative_pnl' in strategy_df.columns:
+                fig_strategy.add_trace(go.Scatter(
+                    x=strategy_df['date'], y=strategy_df['cumulative_pnl'],
+                    mode='lines',
+                    line=dict(color=color, width=2),
+                    name=f"Strategy {addr[:8]}..."
                 ))
 
             # 准备每个人的 JSON 数据用于前端渲染交互
@@ -130,9 +153,9 @@ class TraderVisualizer:
             </div>
             """
 
-        # 整理聚合图表布局
+        # 整理聚合图表布局(历史收益)
         fig_pnl.update_layout(
-            title="Comparative Equity Curves (PnL Over Time)",
+            title="历史收益曲线 (真实交易 PnL)",
             margin=dict(l=10, r=10, t=40, b=10),
             hovermode='x unified',
             template='plotly_white',
@@ -141,6 +164,18 @@ class TraderVisualizer:
             yaxis=dict(tickprefix='$', gridcolor='#f0f0f0')
         )
         chart_div = fig_pnl.to_html(full_html=False, include_plotlyjs='cdn')
+        
+        # 整理策略收益图表布局
+        fig_strategy.update_layout(
+            title="策略收益曲线 (模拟 $5 固定金额跟单)",
+            margin=dict(l=10, r=10, t=40, b=10),
+            hovermode='x unified',
+            template='plotly_white',
+            height=450,
+            xaxis=dict(rangeslider=dict(visible=True, thickness=0.08), type='date'),
+            yaxis=dict(tickprefix='$', gridcolor='#f0f0f0')
+        )
+        strategy_chart_div = fig_strategy.to_html(full_html=False, include_plotlyjs=False)
 
         # 最终 HTML 模板
         html_template = f"""
@@ -174,25 +209,32 @@ class TraderVisualizer:
             position: relative;
         }}
         
-        .monitor-btn {{
+        .chart-toggle-btns {{
             position: absolute;
             top: 20px;
             right: 20px;
-            background: var(--accent-blue);
-            color: white;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }}
+        .toggle-btn {{
+            background: #e2e8f0;
+            color: #64748b;
             border: none;
             padding: 8px 16px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            z-index: 100;
             transition: all 0.2s;
+        }}
+        .toggle-btn.active {{
+            background: var(--accent-blue);
+            color: white;
             box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2);
         }}
-        .monitor-btn:hover {{
-            background: #2563eb;
-            transform: translateY(-1px);
+        .toggle-btn:hover:not(.active) {{
+            background: #cbd5e1;
         }}
 
         .trader-section {{ margin-top: 50px; border-top: 2px dashed #cbd5e1; padding-top: 30px; }}
@@ -225,6 +267,8 @@ class TraderVisualizer:
         .progress-bar-loss {{ height: 100%; background: var(--loss-color); border-radius: 2px; }}
         .pnl-val {{ width: 100px; text-align: right; font-weight: 600; font-size: 13px; }}
         .empty-state {{ text-align: center; padding: 40px; color: #94a3b8; font-size: 13px; }}
+        
+        #chart-actual, #chart-strategy {{ width: 100%; min-height: 450px; }}
     </style>
 </head>
 <body>
@@ -235,8 +279,12 @@ class TraderVisualizer:
         </div>
 
         <div class="main-chart-card">
-            <button class="monitor-btn" onclick="startMonitor()">🚀 Start Live Monitor</button>
-            {chart_div}
+            <div class="chart-toggle-btns">
+                <button class="toggle-btn active" id="btn-actual" onclick="switchChart('actual')">📈 历史收益</button>
+                <button class="toggle-btn" id="btn-strategy" onclick="switchChart('strategy')">📊 策略收益</button>
+            </div>
+            <div id="chart-actual">{chart_div}</div>
+            <div id="chart-strategy" style="display: none;">{strategy_chart_div}</div>
         </div>
 
         {all_traders_html}
@@ -245,10 +293,16 @@ class TraderVisualizer:
     <script>
         const traderAddresses = {json.dumps(addresses)};
 
-        function startMonitor() {{
-            // 聚合所有正在分析的地址进行批量监控启动
-            const addrQuery = traderAddresses.join(',');
-            window.top.location.href = `/copy-trade/setup?address=${{addrQuery}}`;
+        function switchChart(type) {{
+            document.getElementById('btn-actual').classList.toggle('active', type === 'actual');
+            document.getElementById('btn-strategy').classList.toggle('active', type === 'strategy');
+            document.getElementById('chart-actual').style.display = type === 'actual' ? 'block' : 'none';
+            document.getElementById('chart-strategy').style.display = type === 'strategy' ? 'block' : 'none';
+            
+            // 关键修复：触发 resize 事件，强制 Plotly 重新计算宽度以占满容器
+            setTimeout(() => {{
+                window.dispatchEvent(new Event('resize'));
+            }}, 10);
         }}
 
         function formatCurrency(val) {{

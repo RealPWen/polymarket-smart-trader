@@ -154,15 +154,27 @@ class AccountListener:
 
                 time.sleep(self.poll_interval)
                 # 如果没有新交易，打印心跳
+                # 如果没有新交易，打印心跳 (降低频率，每60秒一次)
                 if new_count == 0:
-                    now = datetime.now().strftime('%H:%M:%S') # Re-get current time for heartbeat
-                    print(f"\r🔍 [{now}] 正在监听... (获取到 {num_fetched} 条历史数据，无净增减仓)", end="", flush=True)
+                    now = datetime.now().strftime('%H:%M:%S') 
+                    # 初始化计数器 (在循环外最好，但这里为了最小化改动，使用取模时间)
+                    # 更好的方式: 检查秒数是否为 '00'
+                    if now.endswith(':00') or now.endswith(':30'): # 每30秒打印一次
+                         # 避免同一秒重复打印 (虽然 sleep(1) 理论上不会)
+                         pass
+                         # print(f"🔍 [{now}] 正在监听... (系统正常运行中)") # 暂时完全静默，只记录重要事件
+                    
+                    # 仍然保留心跳文件更新
+
                     
                     # [新增] 写入心跳文件，方便用户查岗
                     try:
-                        # Ensure directory exists
-                        os.makedirs("monitored_trades", exist_ok=True)
-                        with open("monitored_trades/heartbeat.log", "a") as f:
+                        # 写入文件到项目根目录
+                        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        monitor_dir = os.path.join(root_dir, "monitored_trades")
+                        os.makedirs(monitor_dir, exist_ok=True)
+                        
+                        with open(os.path.join(monitor_dir, "heartbeat.log"), "a") as f:
                             f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running...\n")
                     except Exception as file_e: 
                         print(f"⚠️ [{target_address[:8]}..] 写入心跳文件失败: {file_e}")
@@ -194,26 +206,80 @@ class AccountListener:
             self.running = False
 
 if __name__ == "__main__":
+    import config
     import sys
     import json
     import base64
     from trade_handlers import AutoCopyTradeHandler, FileLoggerHandler, RealExecutionHandler
-    import config
     
-    # --- 核心锁定：强制读取 ENV 配置 ---
-    BOT_WALLET = config.FUNDER_ADDRESS.lower() if config.FUNDER_ADDRESS else None
-    TARGET_FROM_ENV = os.getenv("TARGET_TRADER_ADDRESS")
+    # --- 日志重定向设置 ---
+    class DualOutput:
+        def __init__(self, filename):
+            self.terminal = sys.stdout
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            self.log = open(filename, "a", encoding='utf-8', buffering=1) # 1=line buffered
+
+        def write(self, message):
+            self.terminal.write(message)
+            self.log.write(message)
+
+        def flush(self):
+            self.terminal.flush()
+            self.log.flush()
+
+    # 将输出同时重定向到终端和文件
+    log_path = os.path.join(os.path.dirname(__file__), 'logs', 'copy_trade.log')
+    sys.stdout = DualOutput(log_path)
+    sys.stderr = DualOutput(log_path) # 错误也记录
+
+    # --- 使用 argparse 解析参数 ---
+    import argparse
+    parser = argparse.ArgumentParser(description='Polymarket Account Listener')
+    parser.add_argument('targets', nargs='?', help='Comma separated target addresses')
+    parser.add_argument('strategy', nargs='?', help='Strategy config JSON/Base64')
+    parser.add_argument('--exec-address', help='Execution wallet address (overrides config)')
+    parser.add_argument('--exec-key', help='Execution wallet private key (overrides config)')
     
-    # 确定要监听的目标 (支持逗号分隔)
-    arg_target = sys.argv[1] if len(sys.argv) > 1 else None
+    args = parser.parse_args()
+
+    # 1. 确定监听目标
+    arg_target = args.targets
+    TARGET_FROM_ENV = config.TARGET_ADDRESS if hasattr(config, 'TARGET_ADDRESS') else None
+    TARGET_FROM_ENV = os.getenv("TARGET_TRADER_ADDRESS") # 兼容旧环境
     
-    # 解析目标地址列表
     target_wallets = []
     if arg_target:
-        # 支持 "addr1,addr2" 格式
         target_wallets = [t.strip().lower() for t in arg_target.split(',') if t.strip()]
     elif TARGET_FROM_ENV:
         target_wallets = [TARGET_FROM_ENV.lower()]
+        
+    # 2. 确定执行钱包 (优先级: CLI参数 > 环境变量 > Config文件)
+    BOT_WALLET = args.exec_address
+    BOT_PRIVATE_KEY = args.exec_key
+    
+    if not BOT_WALLET:
+        BOT_WALLET = os.getenv("EXEC_WALLET_ADDRESS")
+    if not BOT_PRIVATE_KEY:
+        BOT_PRIVATE_KEY = os.getenv("EXEC_PRIVATE_KEY")
+        
+    if not BOT_WALLET:
+        BOT_WALLET = config.FUNDER_ADDRESS if hasattr(config, 'FUNDER_ADDRESS') else None
+    if not BOT_PRIVATE_KEY:
+        BOT_PRIVATE_KEY = config.PRIVATE_KEY if hasattr(config, 'PRIVATE_KEY') else None
+
+    if BOT_WALLET:
+        BOT_WALLET = BOT_WALLET.lower()
+
+    # 3. 策略配置解析
+    strategy_config = {"mode": 1, "param": 1.0}
+    if args.strategy:
+        try:
+            strategy_config = json.loads(args.strategy)
+        except:
+            try:
+                decoded = base64.b64decode(args.strategy).decode('utf-8')
+                strategy_config = json.loads(decoded)
+            except: pass
         
     print("\n" + "🛡️ " * 20)
     print("      POLYMARKET 多路自动化跟单系统启动")
@@ -230,42 +296,34 @@ if __name__ == "__main__":
         
     # --- 安全熔断器 ---
     for t in target_wallets:
-        if BOT_WALLET == t:
-            print(f"🚨 [错误] 监听目标包含当前执行钱包 ({t})，系统拒绝启动！")
-            sys.exit(1)
+        if BOT_WALLET and t and BOT_WALLET.lower() == t.lower():
+             print(f"⚠️ [警告] 您正在监听自己的执行钱包 ({t})。")
+             print("   这可能会导致循环跟单！请确保您知道自己在做什么。")
+             # sys.exit(1) # 暂时允许，仅提示警告
 
     listener = AccountListener(target_wallets)
     
     # 注册默认处理器
     listener.add_handler(ConsoleLogHandler()) 
     
-    # 接收 CLI 策略配置
-    strategy_config = {"mode": 1, "param": 1.0}
-    if len(sys.argv) > 2:
-        arg2 = sys.argv[2]
-        try:
-            strategy_config = json.loads(arg2)
-        except:
-            try:
-                decoded = base64.b64decode(arg2).decode('utf-8')
-                strategy_config = json.loads(decoded)
-            except: pass
-    else:
-         # 交互模式仅在单地址时推荐，多地址默认用默认策略以免混乱
-         # 这里简化，如果有未传递参数则默认
-         if len(target_wallets) == 1:
-             # 原有交互逻辑保留给单地址场景，或者完全简化
-             pass
+    # 接收 CLI 策略配置 (已由上面的 argparse 处理)
+    pass
 
     print(f"⚙️  全局策略配置: {strategy_config}")
 
+    # 获取项目根目录 (user_listener 的上一级)
+    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    MONITOR_DIR = os.path.join(ROOT_DIR, "monitored_trades")
+    os.makedirs(MONITOR_DIR, exist_ok=True)
+
     # 1. 实盘下单处理器
-    listener.add_handler(RealExecutionHandler(config.PRIVATE_KEY, config.FUNDER_ADDRESS, strategy_config=strategy_config))
+    # 使用动态获取的凭证 (可能是 ENV 传入的，也可能是 Config 回退的)
+    listener.add_handler(RealExecutionHandler(BOT_PRIVATE_KEY, BOT_WALLET, strategy_config=strategy_config))
     
-    # 2. 独立 JSON 文件记录
-    listener.add_handler(AutoCopyTradeHandler(save_dir=f"monitored_trades/multi_session"))
+    # 2. 独立 JSON 文件记录 (保存到项目根目录/monitored_trades)
+    listener.add_handler(AutoCopyTradeHandler(save_dir=os.path.join(MONITOR_DIR, "multi_session")))
     
-    # 3. 汇总 JSONL 日志记录
-    listener.add_handler(FileLoggerHandler(filename=f"monitored_trades/multi_session.jsonl"))
+    # 3. 汇总 JSONL 日志记录 (保存到项目根目录/monitored_trades)
+    listener.add_handler(FileLoggerHandler(filename=os.path.join(MONITOR_DIR, "multi_session.jsonl")))
     
     listener.start_listening()

@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Smart Trader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --sidebar-bg: #12121a;
+            --surface: #1a1a24;
+            --panel-bg: #1e1e28;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #e5e7eb;
+            --text-muted: #6b7280;
+            --border: #2d2d3a;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* ========== 侧边栏 ========== */
+        .sidebar {
+            width: 220px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--accent-gradient);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .version-tag {
+            font-size: 10px;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: auto;
+        }
+
+        .nav-menu {
+            flex: 1;
+            padding: 16px 0;
+        }
+
+        .nav-section {
+            padding: 8px 16px;
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 16px;
+        }
+
+        .nav-section:first-child {
+            margin-top: 0;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text);
+        }
+
+        .nav-item.active {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--primary);
+            border-left-color: var(--primary);
+        }
+
+        .nav-item svg {
+            width: 18px;
+            height: 18px;
+            opacity: 0.7;
+        }
+
+        .nav-item.active svg {
+            opacity: 1;
+        }
+
+        .sidebar-footer {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ========== 主内容区 ========== */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .topbar {
+            height: 56px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            flex-shrink: 0;
+        }
+
+        .topbar-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* ========== 页面视图 ========== */
+        .page-view {
+            flex: 1;
+            overflow: hidden;
+            display: none;
+        }
+
+        .page-view.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ========== 通用组件 ========== */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--panel-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-content {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* ========== 分析用户页面 ========== */
+        .analyze-container {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .search-input {
+            flex: 1;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+        }
+
+        .report-container {
+            flex: 1;
+            overflow: hidden;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .report-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            opacity: 0.3;
+            margin-bottom: 16px;
+        }
+
+        /* ========== 跟单配置页面 ========== */
+        .setup-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .setup-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .setup-card h2 {
+            margin-bottom: 24px;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .form-input {
+            width: 100%;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+        }
+
+        .strategy-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .strategy-card {
+            background: var(--panel-bg);
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .strategy-card:hover {
+            border-color: #444;
+        }
+
+        .strategy-card.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .strategy-title {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .strategy-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .strategy-param {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .strategy-card.active .strategy-param {
+            display: block;
+        }
+
+        .order-type-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .order-type-btn {
+            flex: 1;
+            padding: 12px;
+            background: var(--panel-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .order-type-btn.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .order-type-btn .title {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .order-type-btn .desc {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ========== 跟单监控页面 ========== */
+        .monitor-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            gap: 16px;
+            padding: 16px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .monitor-left {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow: hidden;
+        }
+
+        .monitor-left-bottom {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .monitor-left-bottom .panel {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .monitor-left-bottom .panel .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .monitor-center {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .monitor-right {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .monitor-right .panel {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .monitor-right .panel .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .balance-display {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .balance-amount {
+            font-size: 32px;
+            font-weight: 700;
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        .balance-amount:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+
+        .balance-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .wallet-tag {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 100%;
+            min-height: 180px;
+        }
+
+        .trade-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+        }
+
+        .trade-item:last-child {
+            border-bottom: none;
+        }
+
+        .trade-market {
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .trade-meta {
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        .trade-side {
+            font-weight: 600;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .trade-side.buy {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .trade-side.sell {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .chart-toggle {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+        }
+
+        .chart-toggle.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 策略列表样式 */
+        .strategy-list {
+            margin-top: 8px;
+        }
+
+        .strategy-list-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            margin: 4px 8px;
+            background: rgba(99, 102, 241, 0.08);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 11px;
+            gap: 8px;
+        }
+
+        .strategy-list-item:hover {
+            background: rgba(99, 102, 241, 0.15);
+        }
+
+        .strategy-list-item.active {
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid var(--primary);
+        }
+
+        .strategy-list-item .addr {
+            flex: 1;
+            font-family: monospace;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .strategy-list-item .params {
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        .strategy-list-item .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .strategy-list-item .status-indicator.stopped {
+            background: var(--danger);
+            animation: none;
+        }
+
+        .empty-strategies {
+            padding: 12px 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .strategy-list-item .addr {
+            cursor: pointer;
+        }
+
+        .strategy-list-item .stop-btn {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .strategy-list-item .stop-btn:hover {
+            color: var(--danger);
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .log-entry {
+            white-space: pre-wrap;
+            margin-bottom: 2px;
+            border-bottom: 1px solid #1e293b;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon">P</div>
+                Smart Trader
+                <span class="version-tag">v1.0</span>
+            </div>
+        </div>
+
+        <nav class="nav-menu">
+            <div class="nav-section">功能</div>
+
+            <div class="nav-item active" data-page="analyze" onclick="switchPage('analyze')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                分析用户
+            </div>
+
+            <div class="nav-item" data-page="monitor-setup" onclick="switchPage('monitor-setup')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                新建跟单
+            </div>
+
+            <div class="nav-item" data-page="tracked-targets" onclick="switchPage('tracked-targets')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                管理跟踪目标
+            </div>
+
+            <div class="nav-item" data-page="accounts" onclick="switchPage('accounts')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                管理账户
+            </div>
+
+            <div class="nav-section" style="display: flex; align-items: center; justify-content: space-between;">
+                <span>我的策略</span>
+                <span id="copytrade-status"
+                    style="display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 400; color: var(--text-muted);">
+                    <span class="status-dot" id="copytrade-status-dot" style="width: 6px; height: 6px;"></span>
+                    <span id="copytrade-status-text">--</span>
+                </span>
+            </div>
+            <div id="strategy-list" class="strategy-list">
+                <div class="empty-strategies">暂无运行中的策略</div>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="status-dot" id="sidebar-status-dot"></span>
+                <span id="sidebar-status-text">检测中...</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 主内容 -->
+    <main class="main-content">
+        <!-- 顶栏 -->
+        <div class="topbar">
+            <div class="topbar-title" id="page-title">分析用户</div>
+            <div class="topbar-actions">
+                <div class="status-badge" id="topbar-status-badge">
+                    <span class="status-dot" id="topbar-status-dot"></span>
+                    <span id="topbar-status-text">检测中...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 页面1：分析用户 ========== -->
+        <div class="page-view active" id="page-analyze">
+            <div class="analyze-container">
+                <div class="search-bar">
+                    <input type="text" class="search-input" id="address-input" placeholder="输入 Polymarket 钱包地址 (0x...)"
+                        spellcheck="false">
+                    <button class="btn btn-primary" onclick="analyzeTrader()">分析</button>
+                </div>
+
+                <div class="report-container" id="report-container" style="display: none;">
+                    <iframe id="report-frame"></iframe>
+                </div>
+
+                <div class="empty-state" id="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <p>输入钱包地址开始分析交易员表现</p>
+                </div>
+
+                <div id="loading-analyze" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p style="text-align: center; color: var(--text-muted);">正在分析...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 页面2：跟单配置 ========== -->
+        <div class="page-view" id="page-monitor-setup">
+            <div class="setup-container">
+                <div class="setup-card">
+                    <h2>配置跟单策略</h2>
+
+                    <div class="form-group">
+                        <label>执行钱包</label>
+                        <select class="form-input" id="exec-wallet" style="cursor: pointer;">
+                            <option value="">-- 选择执行钱包 --</option>
+                        </select>
+                        <p style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
+                            在"管理账户"中添加钱包
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>目标交易员地址</label>
+                        <select class="form-input" id="quick-target-select" onchange="fillTargetAddress()"
+                            style="margin-bottom: 8px; cursor: pointer; color: var(--text-muted);">
+                            <option value="">-- 从已保存的目标中选择 --</option>
+                        </select>
+                        <input type="text" class="form-input" id="target-address" placeholder="0x..." value="">
+                    </div>
+
+                    <div class="form-group">
+                        <label>选择策略模式</label>
+                        <div class="strategy-options">
+                            <div class="strategy-card" data-mode="1" onclick="selectStrategy(1)">
+                                <div class="strategy-title">1. 按金额比例</div>
+                                <div class="strategy-desc">对方下 100 U，你下 100 × 比例</div>
+                                <div class="strategy-param">
+                                    <input type="text" class="form-input" id="param-1" placeholder="比例 (如 0.1)"
+                                        value="1.0" onclick="event.stopPropagation()">
+                                </div>
+                            </div>
+
+                            <div class="strategy-card active" data-mode="3" onclick="selectStrategy(3)">
+                                <div class="strategy-title">3. 恒定金额</div>
+                                <div class="strategy-desc">无论对方下多少，你固定下 USD 金额</div>
+                                <div class="strategy-param">
+                                    <input type="text" class="form-input" id="param-3" placeholder="金额 (USD)"
+                                        value="5.0" onclick="event.stopPropagation()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>订单类型</label>
+                        <div class="order-type-row">
+                            <div class="order-type-btn active" data-type="FOK" onclick="selectOrderType('FOK')">
+                                <div class="title">市价单 (FOK)</div>
+                                <div class="desc">即时成交，滑点保护</div>
+                            </div>
+                            <div class="order-type-btn" data-type="GTC" onclick="selectOrderType('GTC')">
+                                <div class="title">限价单 (GTC)</div>
+                                <div class="desc">原价跟单，成交率较低</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="margin: 0; font-size: 12px; color: var(--warning);">
+                            ⚠️ 每笔成交必须大于 <strong>5 股</strong>，不足 5 股的订单将无法执行。
+                        </p>
+                    </div>
+
+
+
+
+                    <button class="btn btn-primary" style="width: 100%; padding: 14px;" onclick="launchMonitor()">
+                        确认并启动跟单
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 页面：管理跟踪目标 ========== -->
+        <div class="page-view" id="page-tracked-targets">
+            <div class="setup-container" style="align-items: flex-start; padding-top: 40px;">
+                <div style="width: 100%; max-width: 600px;">
+                    <h2 style="margin-bottom: 24px;">管理跟踪目标</h2>
+
+                    <!-- 添加新目标 -->
+                    <div class="panel" style="margin-bottom: 24px;">
+                        <div class="panel-header">添加跟踪目标</div>
+                        <div class="panel-content">
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label>目标地址 (Address)</label>
+                                <input type="text" class="form-input" id="track-address-input" placeholder="0x...">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label>备注 (Label, e.g. NBA Follow)</label>
+                                <input type="text" class="form-input" id="track-label-input" placeholder="给这个地址起个名字">
+                            </div>
+                            <button class="btn btn-primary" style="width: 100%;" onclick="addTrackedTarget()">
+                                添加至列表
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 已保存列表 -->
+                    <div class="panel">
+                        <div class="panel-header">已保存的跟踪目标</div>
+                        <div class="panel-content" id="tracked-targets-list">
+                            <div style="color: var(--text-muted); text-align: center; padding: 20px;">暂无保存的目标</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 页面: 账户管理 ========== -->
+        <div class="page-view" id="page-accounts">
+            <div class="setup-container" style="align-items: flex-start; padding-top: 40px;">
+                <div style="width: 100%; max-width: 600px;">
+                    <h2 style="margin-bottom: 24px;">管理账户</h2>
+
+                    <!-- 添加新钱包 -->
+                    <div class="panel" style="margin-bottom: 24px;">
+                        <div class="panel-header">添加新钱包</div>
+                        <div class="panel-content">
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label>钱包名称 (备注)</label>
+                                <input type="text" class="form-input" id="wallet-name" placeholder="如: 主账户">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label>钱包地址</label>
+                                <input type="text" class="form-input" id="wallet-address" placeholder="0x...">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label>Private Key</label>
+                                <input type="password" class="form-input" id="wallet-key" placeholder="私钥 (本地存储，不会上传)">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label>API Key (可选)</label>
+                                <input type="password" class="form-input" id="wallet-api-key"
+                                    placeholder="Polymarket API Key">
+                            </div>
+                            <div
+                                style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 10px; border-radius: 6px; margin-bottom: 16px;">
+                                <p style="margin: 0; font-size: 11px; color: var(--danger);">
+                                    ⚠️ 私钥将存储在浏览器本地存储中，请确保这是你信任的设备。
+                                </p>
+                            </div>
+                            <button class="btn btn-primary" style="width: 100%;" onclick="addWallet()">
+                                添加钱包
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 已绑定钱包列表 -->
+                    <div class="panel">
+                        <div class="panel-header">已绑定钱包</div>
+                        <div class="panel-content" id="wallet-list">
+                            <div style="color: var(--text-muted); text-align: center; padding: 20px;">暂无绑定的钱包</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 页面3：跟单监控仪表盘 ========== -->
+        <div class="page-view" id="page-monitor-dashboard">
+            <div class="monitor-container">
+                <!-- 左列 -->
+                <div class="monitor-left">
+                    <!-- 账户余额 (固定高度) -->
+                    <div class="panel" style="flex-shrink: 0;">
+                        <div class="panel-header">我的账户 (USDC)</div>
+                        <div class="panel-content" style="padding: 16px;">
+                            <div class="balance-display">
+                                <div class="balance-amount" id="my-balance" style="cursor: pointer;"
+                                    onclick="window.open('https://polymarket.com/portfolio', '_blank')"
+                                    title="点击前往 Polymarket Portfolio">$--</div>
+                                <div class="balance-label">可用余额</div>
+                                <div class="wallet-tag" id="my-address">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 持仓和成交各占剩余50% -->
+                    <div class="monitor-left-bottom">
+                        <div class="panel">
+                            <div class="panel-header">我的持仓</div>
+                            <div class="panel-content" id="my-positions">
+                                <div style="color: var(--text-muted); text-align: center; padding: 16px;">暂无持仓</div>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-header">我的成交</div>
+                            <div class="panel-content" id="my-executions">
+                                <div style="color: var(--text-muted); text-align: center; padding: 16px;">暂无成交</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 中列 -->
+                <div class="monitor-center">
+                    <div class="panel" style="flex: 1;">
+                        <div class="panel-header">
+                            <span>我的账户累计收益</span>
+                            <span id="my-pnl-total" style="color: var(--success); font-weight: 600;">--</span>
+                        </div>
+                        <div class="panel-content" style="padding: 8px;">
+                            <div class="chart-container" id="my-pnl-chart"></div>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="flex: 1;">
+                        <div class="panel-header">
+                            <span>跟踪: <span id="target-display">--</span> <span id="target-pnl-total"
+                                    style="margin-left: 8px; font-weight: 600;">--</span></span>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="chart-toggle active" data-type="actual"
+                                    onclick="toggleChart('actual')">真实</button>
+                                <button class="chart-toggle" data-type="strategy"
+                                    onclick="toggleChart('strategy')">策略</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" style="padding: 8px;">
+                            <div class="chart-container" id="target-pnl-chart"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右列 -->
+                <div class="monitor-right">
+                    <div class="panel" style="height: 60%;">
+                        <div class="panel-header">
+                            <span>目标订单流</span>
+                            <label
+                                style="display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="sound-toggle" checked style="width: 14px; height: 14px;">
+                                声音
+                            </label>
+                        </div>
+                        <div class="panel-content" id="target-stream">
+                            <div style="color: var(--text-muted); text-align: center; padding: 20px;">等待数据...</div>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="height: 40%; margin-top: 10px;">
+                        <div class="panel-header">系统日志</div>
+                        <div class="panel-content" id="system-logs"
+                            style="font-family: monospace; font-size: 11px; color: #cbd5e1; background: #0f172a; padding: 10px; overflow-y: auto;">
+                            <div class="log-entry">等待日志...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+        preload="auto"></audio>
+
+    <script>
+        // ========== 全局状态 ==========
+        let currentPage = 'analyze';
+        let selectedMode = 3;
+        let selectedOrderType = 'FOK';
+        let monitorConfig = null;
+        let monitorInterval = null;
+        let myWalletAddress = null;
+        let targetDataCache = null;
+        let currentChartType = 'actual';
+        let knownHashes = new Set();
+        let initialLoad = true;
+
+        // 策略管理 (使用 localStorage 持久化)
+        let strategies = JSON.parse(localStorage.getItem('copyStrategies') || '[]');
+        let activeStrategyId = null;
+
+        // 钱包管理 (使用 localStorage 持久化)
+        let wallets = JSON.parse(localStorage.getItem('boundWallets') || '[]');
+
+        // ========== 钱包管理 ==========
+        function generateWalletId() {
+            return 'wallet_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        }
+
+        function saveWallets() {
+            localStorage.setItem('boundWallets', JSON.stringify(wallets));
+            renderWalletList();
+            renderWalletDropdown();
+        }
+
+        function addWallet() {
+            const name = document.getElementById('wallet-name').value.trim();
+            const address = document.getElementById('wallet-address').value.trim();
+            const privateKey = document.getElementById('wallet-key').value.trim();
+            const apiKey = document.getElementById('wallet-api-key').value.trim();
+
+            if (!address || !address.startsWith('0x')) {
+                alert('请输入有效的钱包地址');
+                return;
+            }
+            if (!privateKey) {
+                alert('请输入私钥');
+                return;
+            }
+
+            // 检查是否已存在
+            if (wallets.find(w => w.address.toLowerCase() === address.toLowerCase())) {
+                alert('该钱包地址已存在');
+                return;
+            }
+
+            const wallet = {
+                id: generateWalletId(),
+                name: name || address.slice(0, 8) + '...',
+                address: address,
+                privateKey: privateKey,  // 注意：本地存储敏感信息
+                apiKey: apiKey || '',
+                createdAt: new Date().toISOString()
+            };
+
+            wallets.push(wallet);
+            saveWallets();
+
+            // 清空表单
+            document.getElementById('wallet-name').value = '';
+            document.getElementById('wallet-address').value = '';
+            document.getElementById('wallet-key').value = '';
+            document.getElementById('wallet-api-key').value = '';
+
+            alert('钱包添加成功！');
+        }
+
+        function removeWallet(walletId) {
+            if (!confirm('确定要删除这个钱包吗？')) return;
+            wallets = wallets.filter(w => w.id !== walletId);
+            saveWallets();
+        }
+
+        function renderWalletList() {
+            const container = document.getElementById('wallet-list');
+            if (!container) return;
+
+            if (wallets.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">暂无绑定的钱包</div>';
+                return;
+            }
+
+            container.innerHTML = wallets.map(w => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                    <div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">${w.name}</div>
+                        <div style="font-family: monospace; font-size: 11px; color: var(--text-muted);">${w.address}</div>
+                    </div>
+                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px; color: var(--danger);" onclick="removeWallet('${w.id}')">
+                        删除
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function renderWalletDropdown() {
+            const select = document.getElementById('exec-wallet');
+            if (!select) return;
+
+            select.innerHTML = '<option value="">-- 选择执行钱包 --</option>' +
+                wallets.map(w => `<option value="${w.id}">${w.name} (${w.address.slice(0, 6)}...${w.address.slice(-4)})</option>`).join('');
+        }
+
+        function getWallet(walletId) {
+            return wallets.find(w => w.id === walletId);
+        }
+
+        // ========== 跟踪目标管理 (Address Book) ==========
+        let trackedTargets = JSON.parse(localStorage.getItem('trackedTargets') || '[]');
+
+        function saveTrackedTargets() {
+            localStorage.setItem('trackedTargets', JSON.stringify(trackedTargets));
+            renderTrackedTargetsList();
+            renderQuickTargetSelect();
+        }
+
+        function renderTrackedTargetsList() {
+            const container = document.getElementById('tracked-targets-list');
+            if (!container) return;
+
+            if (trackedTargets.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">暂无保存的目标</div>';
+                return;
+            }
+
+            container.innerHTML = trackedTargets.map((t, index) => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                    <div style="overflow: hidden;">
+                        <div style="font-weight: 600; margin-bottom: 4px; color: #fff;">${t.label}</div>
+                        <div style="font-family: monospace; font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis;">${t.address}</div>
+                    </div>
+                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px; color: var(--danger); white-space: nowrap; margin-left: 8px;" onclick="removeTrackedTarget(${index})">
+                        删除
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function renderQuickTargetSelect() {
+            const select = document.getElementById('quick-target-select');
+            if (!select) return;
+
+            // 保留第一项提示，追加已保存项
+            let options = '<option value="">-- 从已保存的目标中选择 --</option>';
+            options += trackedTargets.map((t, index) =>
+                `<option value="${t.address}">${t.label} (${t.address.slice(0, 6)}...)</option>`
+            ).join('');
+
+            select.innerHTML = options;
+        }
+
+        function addTrackedTarget() {
+            const address = document.getElementById('track-address-input').value.trim();
+            const label = document.getElementById('track-label-input').value.trim();
+
+            if (!address || !address.startsWith('0x')) {
+                alert('请输入有效的地址');
+                return;
+            }
+            if (!label) {
+                alert('请输入备注');
+                return;
+            }
+
+            // 检查重复
+            if (trackedTargets.find(t => t.address.toLowerCase() === address.toLowerCase())) {
+                alert('该地址已在列表中');
+                return;
+            }
+
+            trackedTargets.push({ address, label });
+            saveTrackedTargets();
+
+            // 清空
+            document.getElementById('track-address-input').value = '';
+            document.getElementById('track-label-input').value = '';
+            alert('添加成功');
+        }
+
+        function removeTrackedTarget(index) {
+            if (confirm('确认删除此跟踪目标?')) {
+                trackedTargets.splice(index, 1);
+                saveTrackedTargets();
+            }
+        }
+
+        function fillTargetAddress() {
+            const select = document.getElementById('quick-target-select');
+            const address = select.value;
+            if (address) {
+                document.getElementById('target-address').value = address;
+            }
+        }
+
+        // ========== 策略管理 ==========
+        function generateStrategyId() {
+            return 'strat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        }
+
+        function saveStrategies() {
+            localStorage.setItem('copyStrategies', JSON.stringify(strategies));
+            renderStrategyList();
+        }
+
+        function addStrategy(config) {
+            const strategy = {
+                id: generateStrategyId(),
+                address: config.address,
+                mode: config.mode,
+                param: config.param,
+                orderType: config.orderType,
+                walletId: config.walletId || '',
+                walletName: config.walletName || '',
+                walletAddress: config.walletAddress || '',
+                status: 'running',
+                createdAt: new Date().toISOString()
+            };
+            strategies.push(strategy);
+            saveStrategies();
+            return strategy;
+        }
+
+        function getStrategy(id) {
+            return strategies.find(s => s.id === id);
+        }
+
+        function removeStrategy(id) {
+            strategies = strategies.filter(s => s.id !== id);
+            saveStrategies();
+        }
+
+        function renderStrategyList() {
+            const container = document.getElementById('strategy-list');
+            if (!container) return;
+
+            if (strategies.length === 0) {
+                container.innerHTML = '<div class="empty-strategies">暂无运行中的策略</div>';
+                return;
+            }
+
+            const modeNames = { 1: '比例', 3: '固定' };
+            container.innerHTML = strategies.map(s => {
+                const shortAddr = s.address.slice(0, 6) + '...' + s.address.slice(-4);
+                const paramStr = s.mode === 1 ? `${s.param}x` : `$${s.param}`;
+                const walletLabel = s.walletName ? s.walletName.slice(0, 6) : '默认';
+                const isActive = s.id === activeStrategyId;
+                return `
+                    <div class="strategy-list-item ${isActive ? 'active' : ''}" 
+                         title="目标: ${s.address}\n钱包: ${s.walletAddress || '默认'}">
+                        <span class="status-indicator ${s.status === 'running' ? '' : 'stopped'}"></span>
+                        <span class="addr" onclick="openStrategy('${s.id}')">${shortAddr}</span>
+                        <span class="params">${modeNames[s.mode] || '?'} ${paramStr}</span>
+                        <span class="stop-btn" onclick="stopStrategy(event, '${s.id}')" title="停止跟踪">✕</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function stopStrategy(event, strategyId) {
+            event.stopPropagation();  // 防止触发 openStrategy
+            if (!confirm('确定要停止并删除此跟单策略吗？')) return;
+
+            removeStrategy(strategyId);
+
+            // 如果删除的是当前激活的策略，清除监控
+            if (activeStrategyId === strategyId) {
+                activeStrategyId = null;
+                if (monitorInterval) {
+                    clearInterval(monitorInterval);
+                    monitorInterval = null;
+                }
+                monitorConfig = null;
+                switchPage('analyze');
+            }
+
+            console.log('🛑 已停止策略:', strategyId);
+        }
+
+        function openStrategy(strategyId) {
+            const strategy = getStrategy(strategyId);
+            if (!strategy) return;
+
+            activeStrategyId = strategyId;
+            monitorConfig = {
+                address: strategy.address,
+                mode: strategy.mode,
+                param: strategy.param,
+                orderType: strategy.orderType
+            };
+
+            // 高亮侧边栏
+            renderStrategyList();
+
+            // 清除之前的导航高亮
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+
+            // 切换到监控页面
+            switchPage('monitor-dashboard');
+            startMonitoring();
+        }
+
+        // ========== 页面切换 ==========
+        function switchPage(pageName) {
+            currentPage = pageName;
+
+            // 仅在非策略页面时更新 nav-item 高亮
+            if (pageName !== 'monitor-dashboard') {
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.page === pageName) {
+                        item.classList.add('active');
+                    }
+                });
+                // 清除策略列表高亮
+                activeStrategyId = null;
+                renderStrategyList();
+            }
+
+            document.querySelectorAll('.page-view').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById('page-' + pageName).classList.add('active');
+
+            const titles = {
+                'analyze': '分析用户',
+                'monitor-setup': '新建跟单',
+                'accounts': '管理账户',
+                'monitor-dashboard': '跟单监控'
+            };
+            document.getElementById('page-title').innerText = titles[pageName] || pageName;
+        }
+
+        // 页面加载时渲染列表并自动绑定 env 钱包
+        document.addEventListener('DOMContentLoaded', async () => {
+            renderStrategyList();
+            renderWalletList();
+            renderWalletDropdown();
+            renderTrackedTargetsList();
+            renderQuickTargetSelect();
+
+            // 启动健康检查
+            checkHealth();
+            setInterval(checkHealth, 10000);  // 每10秒检查一次
+
+            // 自动从 env 绑定钱包并分析
+            await autoBindEnvWallet();
+        });
+
+        async function checkHealth() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);  // 3秒超时
+
+                const res = await fetch('/api/health', {
+                    signal: controller.signal,
+                    cache: 'no-store'  // 禁用缓存
+                });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    console.log('❌ 健康检查失败: HTTP', res.status);
+                    updateStatusUI('offline', '连接异常');
+                    updateCopyTradeStatus(false, 0);
+                    return;
+                }
+
+                const data = await res.json();
+                console.log('🔍 健康检查:', data);
+
+                if (data.backend) {
+                    if (data.polymarket_api) {
+                        updateStatusUI('online', '连接正常');
+                    } else {
+                        updateStatusUI('warning', 'API 异常');
+                    }
+                    // 更新跟单进程状态
+                    updateCopyTradeStatus(data.copy_trade_running, data.copy_trade_count || 0);
+                } else {
+                    updateStatusUI('offline', '后端离线');
+                    updateCopyTradeStatus(false, 0);
+                }
+            } catch (e) {
+                console.log('❌ 健康检查异常:', e.message);
+                updateStatusUI('offline', '连接断开');
+                updateCopyTradeStatus(false, 0);
+            }
+        }
+
+        function updateCopyTradeStatus(running, count) {
+            const dot = document.getElementById('copytrade-status-dot');
+            const text = document.getElementById('copytrade-status-text');
+
+            if (running && count > 0) {
+                if (dot) {
+                    dot.style.background = 'var(--success)';
+                    dot.style.animation = 'pulse 2s infinite';
+                }
+                if (text) {
+                    text.innerText = '运行中';
+                    text.style.color = 'var(--success)';
+                }
+            } else {
+                if (dot) {
+                    dot.style.background = 'var(--text-muted)';
+                    dot.style.animation = 'none';
+                }
+                if (text) {
+                    text.innerText = '未运行';
+                    text.style.color = 'var(--text-muted)';
+                }
+            }
+
+            // 同步更新策略列表中的状态指示器
+            document.querySelectorAll('.strategy-list-item .status-indicator').forEach(indicator => {
+                if (running && count > 0) {
+                    indicator.style.background = 'var(--success)';
+                    indicator.style.animation = 'pulse 2s infinite';
+                    indicator.classList.remove('stopped');
+                } else {
+                    indicator.style.background = 'var(--text-muted)';
+                    indicator.style.animation = 'none';
+                    indicator.classList.add('stopped');
+                }
+            });
+        }
+
+        function updateStatusUI(status, text) {
+            const sidebarDot = document.getElementById('sidebar-status-dot');
+            const sidebarText = document.getElementById('sidebar-status-text');
+            const topbarDot = document.getElementById('topbar-status-dot');
+            const topbarText = document.getElementById('topbar-status-text');
+            const topbarBadge = document.getElementById('topbar-status-badge');
+
+            const colors = {
+                'online': 'var(--success)',
+                'warning': 'var(--warning)',
+                'offline': 'var(--danger)'
+            };
+
+            const color = colors[status] || colors['offline'];
+            const animation = status === 'online' ? 'pulse 2s infinite' : 'none';
+
+            if (sidebarDot) {
+                sidebarDot.style.background = color;
+                sidebarDot.style.animation = animation;
+            }
+            if (sidebarText) {
+                sidebarText.innerText = text;
+                sidebarText.style.color = status === 'offline' ? 'var(--danger)' : 'inherit';
+            }
+            if (topbarDot) {
+                topbarDot.style.background = color;
+                topbarDot.style.animation = animation;
+            }
+            if (topbarText) {
+                topbarText.innerText = text;
+                topbarText.style.color = status === 'offline' ? 'var(--danger)' : 'inherit';
+            }
+            if (topbarBadge) {
+                if (status === 'offline') {
+                    topbarBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                    topbarBadge.style.borderColor = 'var(--danger)';
+                } else if (status === 'warning') {
+                    topbarBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+                    topbarBadge.style.borderColor = 'var(--warning)';
+                } else {
+                    topbarBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+                    topbarBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                }
+            }
+        }
+
+        async function autoBindEnvWallet() {
+            try {
+                const res = await fetch('/api/env-wallet');
+                const data = await res.json();
+
+                if (data.hasWallet && data.address && data.privateKey) {
+                    // 检查是否已经绑定过这个地址
+                    const exists = wallets.find(w => w.address.toLowerCase() === data.address.toLowerCase());
+                    if (!exists) {
+                        const wallet = {
+                            id: generateWalletId(),
+                            name: 'Main',
+                            address: data.address,
+                            privateKey: data.privateKey,
+                            apiKey: '',
+                            createdAt: new Date().toISOString(),
+                            isEnvWallet: true  // 标记为从 env 自动绑定
+                        };
+                        wallets.push(wallet);
+                        saveWallets();
+                        console.log('✅ 已自动绑定 env 钱包:', data.address.slice(0, 8) + '...');
+                    }
+
+                    // 自动分析当前账户
+                    autoAnalyzeEnvWallet(data.address);
+                }
+            } catch (e) {
+                console.log('自动绑定 env 钱包失败:', e);
+            }
+        }
+
+        async function autoAnalyzeEnvWallet(address) {
+            // 填入地址输入框
+            document.getElementById('address-input').value = address;
+
+            // 显示加载状态
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('report-container').style.display = 'none';
+            document.getElementById('loading-analyze').style.display = 'block';
+
+            console.log('📊 正在自动分析账户:', address.slice(0, 8) + '...');
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: address })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                const frame = document.getElementById('report-frame');
+                const doc = frame.contentWindow.document;
+                doc.open();
+                doc.write(data.html);
+                doc.close();
+
+                document.getElementById('report-container').style.display = 'block';
+                console.log('✅ 自动分析完成');
+
+            } catch (err) {
+                console.error('自动分析失败:', err);
+                document.getElementById('empty-state').style.display = 'flex';
+            } finally {
+                document.getElementById('loading-analyze').style.display = 'none';
+            }
+        }
+
+        // ========== 分析用户 ==========
+        async function analyzeTrader() {
+            const address = document.getElementById('address-input').value.trim();
+            if (!address || !address.startsWith('0x')) {
+                alert('请输入有效的钱包地址');
+                return;
+            }
+
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('report-container').style.display = 'none';
+            document.getElementById('loading-analyze').style.display = 'block';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: address })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                const frame = document.getElementById('report-frame');
+                const doc = frame.contentWindow.document;
+                doc.open();
+                doc.write(data.html);
+                doc.close();
+
+                document.getElementById('report-container').style.display = 'block';
+
+            } catch (err) {
+                alert('分析失败: ' + err.message);
+                document.getElementById('empty-state').style.display = 'flex';
+            } finally {
+                document.getElementById('loading-analyze').style.display = 'none';
+            }
+        }
+
+        document.getElementById('address-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') analyzeTrader();
+        });
+
+        // ========== 策略选择 ==========
+        function selectStrategy(mode) {
+            selectedMode = mode;
+            document.querySelectorAll('.strategy-card').forEach(card => {
+                card.classList.remove('active');
+                if (parseInt(card.dataset.mode) === mode) {
+                    card.classList.add('active');
+                }
+            });
+        }
+
+        function selectOrderType(type) {
+            selectedOrderType = type;
+            document.querySelectorAll('.order-type-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.type === type) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // ========== 启动跟单 ==========
+        async function launchMonitor() {
+            const execWalletId = document.getElementById('exec-wallet').value;
+            const targetAddr = document.getElementById('target-address').value.trim();
+
+            if (!execWalletId) {
+                alert('请选择执行钱包');
+                return;
+            }
+
+            const execWallet = getWallet(execWalletId);
+            if (!execWallet) {
+                alert('所选钱包不存在，请重新选择');
+                return;
+            }
+
+            if (!execWallet.privateKey) {
+                alert('所选钱包缺少私钥，请删除后重新添加！');
+                return;
+            }
+
+            if (!targetAddr || !targetAddr.startsWith('0x')) {
+                alert('请输入有效的目标地址');
+                return;
+            }
+
+            // 检查是否已存在相同地址的策略
+            const existing = strategies.find(s => s.address.toLowerCase() === targetAddr.toLowerCase() && s.walletId === execWalletId);
+            if (existing) {
+                if (!confirm('该钱包已有跟踪此地址的策略，是否仍要添加？')) {
+                    return;
+                }
+            }
+
+            let param = 5.0;
+            if (selectedMode === 1) param = parseFloat(document.getElementById('param-1').value) || 1.0;
+            if (selectedMode === 3) param = parseFloat(document.getElementById('param-3').value) || 5.0;
+
+            monitorConfig = {
+                address: targetAddr,
+                mode: selectedMode,
+                param: param,
+                orderType: selectedOrderType,
+                walletId: execWalletId,
+                walletName: execWallet.name,
+                walletAddress: execWallet.address
+            };
+
+            // 添加到策略列表
+            const newStrategy = addStrategy(monitorConfig);
+            activeStrategyId = newStrategy.id;
+
+            // 尝试启动后端跟单进程
+            try {
+                const res = await fetch('/copy-trade/launch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        addresses: [targetAddr],
+                        strategy: { mode: selectedMode, param: param, order_type: selectedOrderType },
+                        wallet: {
+                            address: execWallet.address,
+                            privateKey: execWallet.privateKey,
+                            apiKey: execWallet.apiKey
+                        }
+                    })
+                });
+                const data = await res.json();
+                console.log('Launch response:', data);
+            } catch (e) {
+                console.error('Launch error:', e);
+            }
+
+            // 清空输入框
+            document.getElementById('target-address').value = '';
+
+            // 切换到监控仪表盘
+            switchPage('monitor-dashboard');
+            startMonitoring();
+        }
+
+        // ========== 监控功能 ==========
+        function startMonitoring() {
+            if (!monitorConfig) return;
+
+            document.getElementById('target-display').innerText =
+                monitorConfig.address.slice(0, 8) + '...' + monitorConfig.address.slice(-6);
+
+            // 重置状态，确保加载新钱包的数据
+            myWalletAddress = null;
+
+            fetchMyBalance();
+            fetchMyPositions();
+            fetchMyExecutions();
+            fetchTargetStream();
+            fetchTargetAnalysis();
+
+            if (monitorInterval) clearInterval(monitorInterval);
+            let tickCount = 0;
+            monitorInterval = setInterval(() => {
+                fetchMyBalance();
+                fetchMyPositions();
+                fetchMyExecutions();
+                fetchTargetStream();
+
+                // 每 20 秒 (4 * 5s) 更新一次 PnL 分析，避免过于频繁
+                tickCount++;
+                if (tickCount % 4 === 0) {
+                    fetchMyPnL();
+                }
+            }, 5000);
+        }
+
+        async function fetchMyBalance() {
+            try {
+                let url = '/api/my-balance';
+                if (monitorConfig && monitorConfig.walletAddress) {
+                    url += `?address=${monitorConfig.walletAddress}`;
+                }
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.cash !== undefined) {
+                    document.getElementById('my-balance').innerText = '$' + data.cash.toFixed(2);
+                    document.getElementById('my-address').innerText =
+                        data.address.slice(0, 6) + '...' + data.address.slice(-4);
+
+                    if (!myWalletAddress) {
+                        myWalletAddress = data.address;
+                        fetchMyPnL();
+                    }
+                }
+            } catch (e) { }
+        }
+
+        async function fetchMyPositions() {
+            try {
+                let url = '/api/my-positions';
+                if (monitorConfig && monitorConfig.walletAddress) {
+                    url += `?address=${monitorConfig.walletAddress}`;
+                }
+                const res = await fetch(url);
+                const positions = await res.json();
+                const container = document.getElementById('my-positions');
+
+                if (positions.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 16px;">暂无持仓</div>';
+                    return;
+                }
+
+                container.innerHTML = positions.map(p => `
+                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e293b; font-size: 11px;">
+                        <div style="flex: 1; overflow: hidden;">
+                            <div style="color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(p.title || 'Unknown').slice(0, 30)}...</div>
+                            <div style="color: #94a3b8;">${p.outcome} · ${(parseFloat(p.size)).toFixed(1)} Shares</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="color: #fff; font-weight: 600;">$${parseFloat(p.currentValue).toFixed(2)}</div>
+                            <div style="color: ${parseFloat(p.percentPnl) >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                                ${parseFloat(p.percentPnl || 0).toFixed(1)}%
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("Positions error:", e);
+            }
+        }
+
+        async function fetchMyExecutions() {
+            try {
+                let url = '/api/my-executions';
+                if (monitorConfig && monitorConfig.walletAddress) {
+                    url += `?address=${monitorConfig.walletAddress}`;
+                }
+                const res = await fetch(url);
+                const trades = await res.json();
+                const container = document.getElementById('my-executions');
+
+                if (trades.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 16px;">暂无成交</div>';
+                    return;
+                }
+
+                container.innerHTML = trades.slice(0, 10).map(t => `
+                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e293b; font-size: 11px;">
+                        <div style="flex: 1; overflow: hidden;">
+                             <div style="color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(t.market_title || 'Unknown').slice(0, 30)}...</div>
+                             <div style="color: #94a3b8;">${t.side} · $${parseFloat(t.my_target_amount).toFixed(2)}</div>
+                        </div>
+                        <div style="text-align: right;">
+                             <div style="color: #64748b;">${t.date_str.split(' ')[1]}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("Executions error:", e);
+            }
+        }
+
+        async function fetchMyPnL() {
+            if (!myWalletAddress) return;
+            try {
+                const res = await fetch(`/api/analysis/${myWalletAddress}`);
+                const data = await res.json();
+
+                if (data.pnl_history && data.pnl_history.length > 0) {
+                    const x = data.pnl_history.map(d => d.date);
+                    const y = data.pnl_history.map(d => d.cumulative_pnl);
+                    const lastPnl = y[y.length - 1];
+
+                    const el = document.getElementById('my-pnl-total');
+                    el.innerText = (lastPnl >= 0 ? '+' : '') + '$' + lastPnl.toFixed(2);
+                    el.style.color = lastPnl >= 0 ? 'var(--success)' : 'var(--danger)';
+
+                    Plotly.react('my-pnl-chart', [{
+                        x: x, y: y, type: 'scatter', mode: 'lines',
+                        line: { color: '#10b981', width: 2 },
+                        fill: 'tozeroy', fillcolor: 'rgba(16, 185, 129, 0.1)'
+                    }], {
+                        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+                        font: { color: '#6b7280', size: 10 },
+                        margin: { t: 8, r: 16, l: 40, b: 24 },
+                        xaxis: { gridcolor: '#2d2d3a', showgrid: true },
+                        yaxis: { gridcolor: '#2d2d3a', showgrid: true, tickprefix: '$' }
+                    }, { responsive: true, displayModeBar: false });
+                }
+            } catch (e) { }
+        }
+
+        async function fetchTargetAnalysis() {
+            if (!monitorConfig) return;
+            try {
+                const res = await fetch(`/api/analysis/${monitorConfig.address}`);
+                targetDataCache = await res.json();
+                renderTargetChart();
+            } catch (e) { }
+        }
+
+        function renderTargetChart() {
+            if (!targetDataCache) return;
+            const history = currentChartType === 'actual' ? targetDataCache.pnl_history : targetDataCache.strategy_pnl_history;
+
+            if (history && history.length > 0) {
+                const x = history.map(d => d.date);
+                const y = history.map(d => d.cumulative_pnl);
+                const lastPnl = y[y.length - 1];
+                const color = currentChartType === 'actual' ? '#6366f1' : '#8b5cf6';
+
+                // 更新收益显示
+                const pnlEl = document.getElementById('target-pnl-total');
+                if (pnlEl) {
+                    pnlEl.innerText = (lastPnl >= 0 ? '+' : '') + '$' + lastPnl.toFixed(2);
+                    pnlEl.style.color = lastPnl >= 0 ? 'var(--success)' : 'var(--danger)';
+                }
+
+                Plotly.react('target-pnl-chart', [{
+                    x: x, y: y, type: 'scatter', mode: 'lines',
+                    line: { color: color, width: 2 },
+                    fill: 'tozeroy', fillcolor: currentChartType === 'actual' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(139, 92, 246, 0.1)'
+                }], {
+                    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+                    font: { color: '#6b7280', size: 10 },
+                    margin: { t: 8, r: 16, l: 40, b: 24 },
+                    xaxis: { gridcolor: '#2d2d3a', showgrid: true },
+                    yaxis: { gridcolor: '#2d2d3a', showgrid: true, tickprefix: '$' }
+                }, { responsive: true, displayModeBar: false });
+            }
+        }
+
+        function toggleChart(type) {
+            currentChartType = type;
+            document.querySelectorAll('.chart-toggle').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.type === type) btn.classList.add('active');
+            });
+            renderTargetChart();
+        }
+
+        async function fetchTargetStream() {
+            if (!monitorConfig) return;
+            try {
+                const res = await fetch(`/stream/${monitorConfig.address}`);
+                const trades = await res.json();
+                if (!Array.isArray(trades) || trades.length === 0) return;
+
+                const container = document.getElementById('target-stream');
+                let hasNew = false;
+
+                trades.forEach(t => {
+                    if (!knownHashes.has(t.transactionHash)) {
+                        knownHashes.add(t.transactionHash);
+                        if (!initialLoad) hasNew = true;
+                    }
+                });
+
+                if (hasNew && document.getElementById('sound-toggle').checked) {
+                    document.getElementById('notif-sound').play().catch(() => { });
+                }
+
+                initialLoad = false;
+
+                container.innerHTML = trades.slice(0, 20).map(t => {
+                    const side = (t.side || '').toUpperCase();
+                    return `
+                        <div class="trade-item">
+                            <div>
+                                <div class="trade-market">${(t.title || 'Unknown').slice(0, 25)}...</div>
+                                <div class="trade-meta">
+                                    <span class="trade-side ${side.toLowerCase()}">${side}</span>
+                                    ${t.outcome || ''} · ${t.date_str || ''}
+                                </div>
+                            </div>
+                            <div style="font-weight: 600;">$${parseFloat(t.price || 0).toFixed(2)}</div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error("Stream error:", e);
+            }
+        }
+
+        // 轮询系统日志
+        async function pollSystemLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const logs = await res.json();
+                const container = document.getElementById('system-logs');
+
+                if (Array.isArray(logs) && logs.length > 0) {
+                    container.innerHTML = logs.map(line => `<div class="log-entry">${line}</div>`).join('');
+                    container.scrollTop = container.scrollHeight; // 自动滚动到底部
+                } else {
+                    container.innerHTML = '<div class="log-entry" style="color: #64748b;">暂无日志...</div>';
+                }
+            } catch (e) {
+                console.log("Log poll error", e);
+            }
+        }
+
+        setInterval(checkHealth, 10000);
+        setInterval(fetchTargetStream, 1000); // 1秒轮询一次订单
+        setInterval(pollSystemLogs, 2000); // 2秒轮询一次日志
+
+        // 初次加载
+        checkHealth();
+        fetchTargetStream();
+        pollSystemLogs();
+        // 初始化默认选择策略3（恒定金额）
+        selectStrategy(3);
+    </script>
+</body>
+
+</html>
+```

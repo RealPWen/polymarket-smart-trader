@@ -43,7 +43,68 @@ except Exception as e:
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('main.html')
+
+@app.route('/api/env-wallet')
+def get_env_wallet():
+    """Return wallet information from environment variables for auto-binding"""
+    try:
+        private_key = os.environ.get('POLYMARKET_PRIVATE_KEY', '')
+        funder_address = os.environ.get('POLYMARKET_FUNDER_ADDRESS', '')
+        
+        if private_key and funder_address:
+            # 只返回地址，私钥通过单独的安全方式处理
+            return jsonify({
+                'hasWallet': True,
+                'address': funder_address,
+                'privateKey': private_key  # 注意：这是本地开发用，生产环境需要更安全的方式
+            })
+        else:
+            return jsonify({'hasWallet': False})
+    except Exception as e:
+        return jsonify({'hasWallet': False, 'error': str(e)})
+
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint to verify backend and API connection"""
+    try:
+        status = {
+            'backend': True,
+            'timestamp': datetime.now().isoformat(),
+            'polymarket_api': False,
+            'copy_trade_running': False,
+            'copy_trade_count': 0
+        }
+        
+        # Test Polymarket API connection
+        if tester:
+            try:
+                # Simple API call to verify connection
+                balance = tester.get_balance()
+                status['polymarket_api'] = True
+                status['balance'] = float(balance) if balance else 0
+            except Exception as api_err:
+                status['polymarket_api'] = False
+                status['api_error'] = str(api_err)
+        
+        # Check if copy trade process is running
+        try:
+            result = subprocess.run(
+                ['pgrep', '-f', 'account_listener.py'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                pids = [p for p in result.stdout.strip().split('\n') if p]
+                status['copy_trade_running'] = len(pids) > 0
+                status['copy_trade_count'] = len(pids)
+        except Exception:
+            pass
+        
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'backend': False, 'error': str(e)})
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -73,6 +134,20 @@ def stream_trades(address):
         return jsonify(trades_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/logs')
+def get_logs():
+    try:
+        log_file = os.path.join(os.path.dirname(__file__), 'logs', 'copy_trade.log')
+        if not os.path.exists(log_file):
+            return jsonify(["日志文件不存在"])
+            
+        # 读取最后 50 行
+        with open(log_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            return jsonify(lines[-50:])
+    except Exception as e:
+        return jsonify([f"读取日志失败: {str(e)}"])
 
 @app.route('/api/analysis/<address>')
 def get_analysis_data(address):
@@ -193,21 +268,36 @@ def update_copy_trade_clients():
         # -m: Prevent disk idle sleep
         # -s: Prevent system sleep
         # -u: Declare user is active
+        # 获取钱包配置
+        wallet_info = request.json.get('wallet', {})
+        exec_address = wallet_info.get('address', '')
+        exec_private_key = wallet_info.get('privateKey', '')
+        
+        exec_args = ""
+        if exec_address and exec_private_key:
+             # 使用 CLI 参数传递 (移除单引号以避免 shell 解析问题)
+             exec_address = exec_address.replace("'", "")
+             exec_private_key = exec_private_key.replace("'", "")
+             exec_args = f"--exec-address {exec_address} --exec-key {exec_private_key}"
+             
         if platform.system() == 'Windows':
-            cmd = [python_path, listener_script, combined_addresses, strategy_b64]
-            subprocess.Popen(cmd, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+             # Windows 启动命令
+             cmd_str = f'cmd /c start "Polymarket Listener" cmd /k "cd /d {project_root} && {python_path} "{listener_script}" "{combined_addresses}" "{strategy_b64}" {exec_args}"'
+             subprocess.Popen(cmd_str, shell=True)
         else:
+            # MacOS 启动命令
+            # 注意：account_listener.py 的参数顺序是: targets strategy [optional args]
             applescript = f'''
             tell application "Terminal"
-                do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
+                do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64} {exec_args}"
                 activate
             end tell
             '''
             subprocess.run(['osascript', '-e', applescript])
         
         return jsonify({
-            "status": "restarted", 
-            "message": f"服务已重启，正在监控 {len(new_addresses)} 个地址"
+            "status": "started",
+            "message": f"多路监听器启动成功，监听: {combined_addresses}"
         })
         
     except Exception as e:
@@ -244,6 +334,16 @@ def start_copy_trade():
         print(f"检查进程状态失败: {e}")
 
     try:
+        # 获取钱包配置
+        wallet_info = request.json.get('wallet', {})
+        exec_address = wallet_info.get('address', '')
+        exec_private_key = wallet_info.get('privateKey', '')
+        
+        exec_args = ""
+        if exec_address and exec_private_key:
+             # 使用 CLI 参数传递 (移除单引号以避免 shell 解析问题，假设地址/私钥无空格)
+             exec_args = f"--exec-address {exec_address} --exec-key {exec_private_key}"
+        
         # 获取项目根目录和 Python 路径
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         try:
@@ -256,15 +356,15 @@ def start_copy_trade():
         listener_script = os.path.join(project_root, 'user_listener', 'account_listener.py')
         
         # 使用 osascript 在新的 Terminal 窗口中启动（macOS）
-        # 或 subprocess.Popen on Windows
         
         if platform.system() == 'Windows':
-            cmd = [python_path, listener_script, address]
-            subprocess.Popen(cmd, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            cmd_str = f'cmd /c start "Polymarket Listener" cmd /k "cd /d {project_root} && {python_path} "{listener_script}" "{address}" {exec_args}"'
+            subprocess.Popen(cmd_str, shell=True)
+            
         else:
             applescript = f'''
             tell application "Terminal"
-                do script "cd {project_root} && {python_path} {listener_script} {address}"
+                do script "cd {project_root} && {python_path} {listener_script} {address} {exec_args}"
                 activate
             end tell
             '''
@@ -423,15 +523,27 @@ def launch_copy_trade():
         except Exception as e:
             print(f"⚠️ 无法写入策略初始配置文件: {e}")
             
+        # 获取钱包配置
+        wallet_info = data.get('wallet', {})
+        exec_address = wallet_info.get('address', '')
+        exec_private_key = wallet_info.get('privateKey', '')
+        
+        exec_args = ""
+        if exec_address and exec_private_key:
+             # 使用 CLI 参数传递 (移除单引号以避免 shell 解析问题)
+             exec_address = exec_address.replace("'", "")
+             exec_private_key = exec_private_key.replace("'", "")
+             exec_args = f"--exec-address {exec_address} --exec-key {exec_private_key}"
+
         if platform.system() == "Windows":
-            # Windows: 使用 subprocess.Popen 启动新终端
-            cmd = [python_path, listener_script, combined_addresses, strategy_b64]
-            subprocess.Popen(cmd, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+             # Windows 启动命令
+             cmd_str = f'cmd /c start "Polymarket Listener" cmd /k "cd /d {project_root} && {python_path} "{listener_script}" "{combined_addresses}" "{strategy_b64}" {exec_args}"'
+             subprocess.Popen(cmd_str, shell=True)
         else:
             # macOS: 使用 AppleScript
             applescript = f'''
             tell application "Terminal"
-                do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64}"
+                do script "cd {project_root} && caffeinate -dimsu {python_path} {listener_script} {combined_addresses} {strategy_b64} {exec_args}"
                 activate
             end tell
             '''
@@ -477,9 +589,14 @@ def copy_trade_dashboard():
 def get_my_executions():
     try:
         import config
+        # 优先从请求参数获取地址
+        target_address = request.args.get('address')
+        if not target_address:
+            target_address = config.FUNDER_ADDRESS
+            
         # 直接从 API 读取我的历史成交
         # limit=50: 获取最近 50 条
-        trades_df = fetcher.get_trades(wallet_address=config.FUNDER_ADDRESS, limit=50, silent=True)
+        trades_df = fetcher.get_trades(wallet_address=target_address, limit=50, silent=True)
         
         if trades_df.empty:
             return jsonify([])
@@ -511,16 +628,24 @@ def get_my_executions():
 def get_my_balance():
     try:
         import config
+        # 优先从请求参数获取地址
+        target_address = request.args.get('address')
+        if not target_address:
+            target_address = config.FUNDER_ADDRESS
+
         # 优先使用 CLOB Client (tester) 获取实时余额，它比 Data API (fetcher) 更准确
-        if tester:
+        # 注意：如果查询的是非默认钱包，只能用 Data API
+        if target_address and target_address.lower() != config.FUNDER_ADDRESS.lower():
+             cash = fetcher.get_user_cash_balance(target_address)
+        elif tester:
             cash = tester.get_balance()
-            print(f"💰 [CLOB] 实时余额: ${cash:.2f}")
+            # print(f"💰 [CLOB] 实时余额: ${cash:.2f}")
         else:
             # 兜底方案
-            cash = fetcher.get_user_cash_balance(config.FUNDER_ADDRESS)
-            print(f"⚠️ [DataAPI] 使用兜底余额: ${cash:.2f}")
+            cash = fetcher.get_user_cash_balance(target_address)
+            # print(f"⚠️ [DataAPI] 使用兜底余额: ${cash:.2f}")
             
-        return jsonify({"cash": cash, "address": config.FUNDER_ADDRESS})
+        return jsonify({"cash": cash, "address": target_address})
     except Exception as e:
         print(f"❌ 获取余额失败: {e}")
         return jsonify({"error": str(e)}), 500
@@ -529,20 +654,32 @@ def get_my_balance():
 def get_my_positions():
     try:
         import config
-        positions_df = fetcher.get_user_positions(config.FUNDER_ADDRESS)
+        # 优先从请求参数获取地址
+        target_address = request.args.get('address')
+        if not target_address:
+            target_address = config.FUNDER_ADDRESS
+            
+        # print(f"🔍 查询持仓: {target_address}")
+        positions_df = fetcher.get_user_positions(target_address)
+        
         if positions_df.empty:
+            # print("❌ API 返回空持仓数据")
             return jsonify([])
+            
+        # print(f"✅ API 返回原始持仓数: {len(positions_df)}")
             
         # 数据清洗与过滤
         positions_df['size'] = pd.to_numeric(positions_df['size'], errors='coerce').fillna(0)
         positions_df['currentValue'] = pd.to_numeric(positions_df.get('currentValue', 0), errors='coerce').fillna(0)
         
         # 过滤掉极其微小的持仓 (Value < $0.01)
-        # 这通常是已经归零的期权或者残留的灰尘
         valid_positions = positions_df[positions_df['currentValue'] > 0.01].copy()
+        
+        # print(f"✅ 过滤后有效持仓数: {len(valid_positions)}")
         
         return jsonify(valid_positions.to_dict('records'))
     except Exception as e:
+        print(f"❌ 获取持仓异常: {e}")
         return jsonify([])
 
 if __name__ == '__main__':
