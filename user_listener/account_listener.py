@@ -12,7 +12,7 @@ except ImportError:
 import threading
 
 class AccountListener:
-    def __init__(self, wallet_addresses: list, poll_interval: int = 3):
+    def __init__(self, wallet_addresses: list, poll_interval: int = 1):
         self.fetcher = PolymarketDataFetcher()
         # 统一转为 list 并去重
         if isinstance(wallet_addresses, str):
