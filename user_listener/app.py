@@ -685,4 +685,4 @@ def get_my_positions():
 if __name__ == '__main__':
     # Ensure templates directory exists
     os.makedirs('templates', exist_ok=True)
-    app.run(debug=True, port=5005)
+    app.run(host='0.0.0.0', debug=True, port=5005)
