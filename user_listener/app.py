@@ -131,6 +131,20 @@ def _start_listener_process(project_root, listener_script, python_path,
 
 tester = None # 提前声明，防止 NameError
 
+# --- Session 配置 ---
+app.secret_key = os.urandom(24)  # 用于加密 session
+
+def login_required(f):
+    """登录验证装饰器"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        from flask import session, redirect, url_for
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # --- 启动时连接验证 ---
 try:
     import config
@@ -155,7 +169,36 @@ except Exception as e:
     print(f"❌ [系统] 启动连接验证失败: {e}")
 # --------------------
 
+# --- 登录相关路由 ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    from flask import session, redirect, url_for
+    
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        correct_password = config.WEB_ACCESS_PASSWORD if hasattr(config, 'WEB_ACCESS_PASSWORD') else ''
+        
+        if password == correct_password and correct_password:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='密码错误，请重试')
+    
+    # 如果未设置密码，直接放行
+    if not hasattr(config, 'WEB_ACCESS_PASSWORD') or not config.WEB_ACCESS_PASSWORD:
+        session['logged_in'] = True
+        return redirect(url_for('index'))
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    from flask import session, redirect, url_for
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     return render_template('main.html')
 
@@ -590,6 +633,7 @@ def get_copy_trade_status(address):
     })
 
 @app.route('/copy-trade/setup')
+@login_required
 def copy_trade_setup():
     return render_template('setup.html')
 
@@ -672,6 +716,7 @@ def update_strategy():
 
 
 @app.route('/copy-trade/dashboard')
+@login_required
 def copy_trade_dashboard():
     address = request.args.get('address')
     return render_template('dashboard.html', address=address)

@@ -24,6 +24,9 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER", "")
 
+# Web Access Password
+WEB_ACCESS_PASSWORD = os.getenv("WEB_ACCESS_PASSWORD", "")
+
 # 验证有效性
 if FUNDER_ADDRESS:
     # 强制清理地址格式，防止空格等导致的匹配失败
