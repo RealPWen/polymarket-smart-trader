@@ -347,6 +347,9 @@ def get_logs():
 @app.route('/api/analysis/<address>')
 def get_analysis_data(address):
     try:
+        # 清除市场缓存，确保获取最新的市场状态（包括结算信息）
+        visualizer.analyzer.market_cache.clear()
+        
         # Perform full analysis
         analysis_df, trades_df, active_df = visualizer.analyzer.analyze_trader(address, limit=5000)
         
@@ -819,8 +822,12 @@ def get_my_executions():
                 
                 trades.append({
                     "market_title": row.get('title', 'Unknown Market'),
+                    "market_slug": row.get('slug', row.get('market_slug', '')),
+                    "condition_id": row.get('conditionId', row.get('market', '')),
                     "side": row.get('side', 'UNKNOWN'),
-                    "size": f"{size:.2f}",
+                    "size": size,  # 股数 (float)
+                    "shares": size,  # 别名
+                    "price": price,  # 每股价格
                     "my_target_amount": usd_val, # 复用前端字段名 (实际是 Total Value)
                     "date_str": datetime.fromtimestamp(ts).strftime('%m-%d %H:%M:%S'),
                     "timestamp": ts

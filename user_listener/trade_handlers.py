@@ -105,10 +105,15 @@ class RealExecutionHandler(BaseTradeHandler):
             self.strategy = strategy_config or {"mode": 1, "param": 1.0}
             self.last_strategy_mtime = 0
             self.my_address = funder_address
+            
+            # 防止同一市场重复跟单: {(conditionId, outcome, side): timestamp}
+            self.traded_markets = {}
+            
             print(f"🚀 [系统] 实盘下单处理器已就绪 | 模式: {self.strategy['mode']} | 参数: {self.strategy['param']}")
         except Exception as e:
             print(f"❌ [系统] 初始化交易模块失败: {e}")
             self.trader = None
+            self.traded_markets = {}
 
     def _reload_strategy(self):
         """尝试从文件加载最新的策略配置 (带缓存优化)"""
@@ -137,14 +142,30 @@ class RealExecutionHandler(BaseTradeHandler):
             return
             
         import config # 动态读取配置中的阈值
+        import time
         
         # --- 动态策略热更新 ---
         self._reload_strategy()
 
         token_id = trade_data.get('asset')
-
-
+        condition_id = trade_data.get('conditionId', '')
+        outcome = trade_data.get('outcome', '')
         side = trade_data.get('side', '').upper()
+        
+        # --- 防止同一市场重复跟单 ---
+        market_key = (condition_id, outcome, side)
+        current_time = time.time()
+        
+        if market_key in self.traded_markets:
+            last_trade_time = self.traded_markets[market_key]
+            # 24小时内同一市场+方向只跟单一次
+            if current_time - last_trade_time < 86400:  # 86400 秒 = 24 小时
+                hours_ago = (current_time - last_trade_time) / 3600
+                market_title = trade_data.get('title', 'Unknown')[:30]
+                print(f"\n⏭️ [跳过重复] 市场 '{market_title}...' ({side})")
+                print(f"   该市场已在 {hours_ago:.1f} 小时前跟单过，24小时内不重复跟单")
+                return
+        
         trader_shares = float(trade_data.get('size', 0))
         price = float(trade_data.get('price', 0))
         trader_amount = trader_shares * price
@@ -274,8 +295,12 @@ class RealExecutionHandler(BaseTradeHandler):
             result = self.trader.place_order(token_id, side, my_size, execution_price, order_type=order_type)
             print(f"✅ [成交] 订单已提交: {json.dumps(result, ensure_ascii=False)}")
             
-            # --- 记录我的成交日志 (供前端展示) ---
+            # 记录已跟单的市场 (防止重复跟单)
             import time
+            self.traded_markets[market_key] = time.time()
+            print(f"📝 [记录] 市场已标记为已跟单，24小时内不再重复")
+            
+            # --- 记录我的成交日志 (供前端展示) ---
             log_entry = {
                 "timestamp": time.time(),
                 "date_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -288,6 +313,7 @@ class RealExecutionHandler(BaseTradeHandler):
                 "price": execution_price,
                 "market_token": token_id,
                 "market_title": trade_data.get('title', 'Unknown Market'),
+                "condition_id": condition_id,
                 "tx_hash": result.get('transactionHash') or result.get('orderID') or "pending" 
             }
             try:

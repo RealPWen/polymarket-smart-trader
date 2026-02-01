@@ -1930,11 +1930,28 @@
                     return;
                 }
 
-                container.innerHTML = positions.map(p => `
+                container.innerHTML = positions.map(p => {
+                    // 构建市场链接 (使用 conditionId 或 marketSlug)
+                    const marketSlug = p.marketSlug || p.slug || '';
+                    const conditionId = p.conditionId || p.asset || '';
+                    const marketUrl = marketSlug
+                        ? `https://polymarket.com/event/${marketSlug}`
+                        : (conditionId ? `https://polymarket.com/markets/${conditionId}` : '#');
+
+                    // 计算平均价格
+                    const size = parseFloat(p.size) || 0;
+                    const avgCost = parseFloat(p.avgPrice) || parseFloat(p.initialValue) / size || 0;
+                    const avgPriceDisplay = avgCost > 0 ? `@$${avgCost.toFixed(2)}` : '';
+
+                    return `
                     <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e293b; font-size: 11px;">
                         <div style="flex: 1; overflow: hidden;">
-                            <div style="color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(p.title || 'Unknown').slice(0, 30)}...</div>
-                            <div style="color: #94a3b8;">${p.outcome} · ${(parseFloat(p.size)).toFixed(1)} Shares</div>
+                            <a href="${marketUrl}" target="_blank" 
+                               style="color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; text-decoration: none; cursor: pointer;"
+                               onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='#e2e8f0'">
+                                ${(p.title || 'Unknown').slice(0, 30)}...
+                            </a>
+                            <div style="color: #94a3b8;">${p.outcome} · ${size.toFixed(1)} Shares ${avgPriceDisplay}</div>
                         </div>
                         <div style="text-align: right;">
                             <div style="color: #fff; font-weight: 600;">$${parseFloat(p.currentValue).toFixed(2)}</div>
@@ -1943,7 +1960,8 @@
                             </div>
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             } catch (e) {
                 console.error("Positions error:", e);
             }
@@ -1964,17 +1982,35 @@
                     return;
                 }
 
-                container.innerHTML = trades.slice(0, 10).map(t => `
+                container.innerHTML = trades.slice(0, 10).map(t => {
+                    // 构建市场链接
+                    const marketSlug = t.market_slug || t.slug || '';
+                    const conditionId = t.condition_id || t.market || '';
+                    const marketUrl = marketSlug
+                        ? `https://polymarket.com/event/${marketSlug}`
+                        : (conditionId ? `https://polymarket.com/markets/${conditionId}` : '#');
+
+                    // 获取每股价格 (优先使用后端返回的 price)
+                    const amount = parseFloat(t.my_target_amount) || 0;
+                    const pricePerShare = parseFloat(t.price) || 0;
+                    const priceDisplay = pricePerShare > 0 ? `@$${pricePerShare.toFixed(2)}` : '';
+
+                    return `
                     <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e293b; font-size: 11px;">
                         <div style="flex: 1; overflow: hidden;">
-                             <div style="color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(t.market_title || 'Unknown').slice(0, 30)}...</div>
-                             <div style="color: #94a3b8;">${t.side} · $${parseFloat(t.my_target_amount).toFixed(2)}</div>
+                             <a href="${marketUrl}" target="_blank" 
+                                style="color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; text-decoration: none; cursor: pointer;"
+                                onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='#e2e8f0'">
+                                 ${(t.market_title || 'Unknown').slice(0, 30)}...
+                             </a>
+                             <div style="color: #94a3b8;">${t.side} · $${amount.toFixed(2)} ${priceDisplay}</div>
                         </div>
                         <div style="text-align: right;">
                              <div style="color: #64748b;">${t.date_str.split(' ')[1]}</div>
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             } catch (e) {
                 console.error("Executions error:", e);
             }
