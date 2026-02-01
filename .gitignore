@@ -23,4 +23,6 @@ env/
 monitored_trades/
 report_*.html
 !example_data.csv
-monitored_trades/
+
+# Sync data (server-side user data, should not be overwritten by git pull)
+user_listener/sync_data/
