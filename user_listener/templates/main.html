@@ -1878,20 +1878,16 @@
             fetchTargetAnalysis();
 
             if (monitorInterval) clearInterval(monitorInterval);
-            let tickCount = 0;
             monitorInterval = setInterval(() => {
-                fetchMyBalance();
+                fetchMyBalance();  // 余额变化时会自动触发 PnL 更新
                 fetchMyPositions();
                 fetchMyExecutions();
                 fetchTargetStream();
-
-                // 每 20 秒 (4 * 5s) 更新一次 PnL 分析，避免过于频繁
-                tickCount++;
-                if (tickCount % 4 === 0) {
-                    fetchMyPnL();
-                }
             }, 5000);
         }
+
+        // 记录上次余额，用于检测变化
+        let lastKnownBalance = null;
 
         async function fetchMyBalance() {
             try {
@@ -1903,12 +1899,21 @@
                 const data = await res.json();
 
                 if (data.cash !== undefined) {
-                    document.getElementById('my-balance').innerText = '$' + data.cash.toFixed(2);
+                    const currentBalance = data.cash;
+                    document.getElementById('my-balance').innerText = '$' + currentBalance.toFixed(2);
                     document.getElementById('my-address').innerText =
                         data.address.slice(0, 6) + '...' + data.address.slice(-4);
 
+                    // 首次加载时设置地址和初始 PnL
                     if (!myWalletAddress) {
                         myWalletAddress = data.address;
+                        lastKnownBalance = currentBalance;
+                        fetchMyPnL();
+                    }
+                    // 检测余额变化 (允许 $0.01 的误差)
+                    else if (lastKnownBalance !== null && Math.abs(currentBalance - lastKnownBalance) > 0.01) {
+                        console.log(`💰 余额变化检测: $${lastKnownBalance.toFixed(2)} → $${currentBalance.toFixed(2)}, 刷新 PnL 曲线`);
+                        lastKnownBalance = currentBalance;
                         fetchMyPnL();
                     }
                 }
